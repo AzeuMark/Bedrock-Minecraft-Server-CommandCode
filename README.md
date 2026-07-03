@@ -928,8 +928,6 @@ load_config
 #!/bin/bash
 #
 # mc-menu.sh — Modern terminal dashboard for Minecraft Bedrock Server Manager.
-# Installed to /usr/local/bin/mc and /usr/local/bin/minecraft.
-# The status panel refreshes every second while the menu stays static.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
@@ -950,18 +948,25 @@ check_first_run() {
   fi
 }
 
-move_to() { printf "\033[%s;1H" "$1"; }
-clear_line() { printf "\033[2K"; }
+draw_dashboard() {
+  local icon status ver ram ip port players max_players
+  icon=$(get_status_icon); status=$(get_status_text)
+  ver=$(get_server_version); ram=$(get_ram_usage)
+  ip=$(get_server_ip); port=$(get_server_port)
+  players=$(get_player_count); max_players=$(get_max_players)
+  local e="🔴"; server_is_running && e="🟢"
 
-draw_static_frame() {
-  clear
+  echo ""
   echo "  ╔══════════════════════════════════════════════════════╗"
   echo "  ║       🎮 MINECRAFT BEDROCK SERVER MANAGER          ║"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo ""
-  echo "    status_line_1"; echo "    status_line_2"
-  echo "    status_line_3"; echo "    status_line_4"
-  echo "    status_line_5"; echo "    status_line_6"
+  echo "    ${e} ${icon} Status    : ${status}"
+  echo "    📦 Version   : ${ver}"
+  echo "    🧑 Players   : ${players} / ${max_players}"
+  echo "    💾 RAM       : ${ram}"
+  echo "    🌐 IP        : ${ip}"
+  echo "    🔌 Port      : ${port}"
   echo ""
   echo "  ═══════════════════════════════════════════════════════"
   echo ""
@@ -972,24 +977,7 @@ draw_static_frame() {
   echo "    5  💾  BACKUP WORLD"
   echo "    6  📡  CHECK FOR UPDATES"
   echo "    7  🚪  EXIT"
-  echo ""; echo "  ═══════════════════════════════════════════════════════"
-}
-
-refresh_status_lines() {
-  local icon status ver ram ip port players max_players
-  icon=$(get_status_icon); status=$(get_status_text)
-  ver=$(get_server_version); ram=$(get_ram_usage)
-  ip=$(get_server_ip); port=$(get_server_port)
-  players=$(get_player_count); max_players=$(get_max_players)
-  local e="🔴"; server_is_running && e="🟢"
-
-  move_to 6; clear_line; echo "    ${e} ${icon} Status  : ${status}"
-  move_to 7; clear_line; echo "    📦 Version   : ${ver}"
-  move_to 8; clear_line; echo "    🧑 Players   : ${players} / ${max_players}"
-  move_to 9; clear_line; echo "    💾 RAM       : ${ram}"
-  move_to 10; clear_line; echo "    🌐 IP        : ${ip}"
-  move_to 11; clear_line; echo "    🔌 Port      : ${port}"
-  move_to 22
+  echo ""; echo "  ═══════════════════════════════════════════════════════" ; echo ""
 }
 
 handle_choice() {
@@ -998,12 +986,11 @@ handle_choice() {
     1) bash "$SCRIPTS_DIR/server_actions.sh" start; read -r -p "  Press Enter to return..." ;;
     2) bash "$SCRIPTS_DIR/server_actions.sh" stop; read -r -p "  Press Enter to return..." ;;
     3) bash "$SCRIPTS_DIR/server_actions.sh" restart; read -r -p "  Press Enter to return..." ;;
-    4) trap '' INT; bash "$SCRIPTS_DIR/logs.sh" tail; trap - INT; draw_static_frame ;;
+    4) trap '' INT; bash "$SCRIPTS_DIR/logs.sh" tail; trap - INT ;;
     5) backup_menu ;;
     6) bash "$SCRIPTS_DIR/versions.sh"; echo ""; read -r -p "  Press Enter to return..." ;;
     7) clear; echo ""; echo "  👋 Goodbye!"; echo ""; exit 0 ;;
   esac
-  draw_static_frame; refresh_status_lines
 }
 
 backup_menu() {
@@ -1012,12 +999,36 @@ backup_menu() {
     echo "  ╔══════════════════════════════════════════════════════╗"
     echo "  ║          💾 BACKUP WORLD                            ║"
     echo "  ╚══════════════════════════════════════════════════════╝"
-    echo ""; echo "  ⚠ Google Drive is not connected."; echo ""; read -r -p "  Set up now? (y/N): " g
+    echo ""; echo "  ⚠ Google Drive is not connected."; echo ""
+    read -r -p "  Set up now? (y/N): " g
     if [[ "$g" == "y" || "$g" == "Y" ]]; then bash "$SCRIPTS_DIR/gdrive_setup.sh"
       if ! is_gdrive_connected; then echo ""; echo "  ✗ Not completed."; read -r -p "  Enter..."; return; fi
     else return; fi
   fi
   while true; do
+    clear
+    echo "  ╔══════════════════════════════════════════════════════╗"
+    echo "  ║          💾 BACKUP WORLD                            ║"
+    echo "  ╚══════════════════════════════════════════════════════╝"
+    echo ""; echo "    1  📤  BACKUP    2  📥  RESTORE    3  ⏰  AUTO    4  🔙  BACK"
+    echo ""; read -r -p "  Option [1-4]: " c
+    case "$c" in
+      1) bash "$SCRIPTS_DIR/backup_now.sh"; read -r -p "  Enter..." ;;
+      2) bash "$SCRIPTS_DIR/backup_restore.sh"; read -r -p "  Enter..." ;;
+      3) bash "$SCRIPTS_DIR/backup_auto.sh"; read -r -p "  Enter..." ;;
+      *) return ;;
+    esac
+  done
+}
+
+check_first_run
+while true; do
+  clear; draw_dashboard
+  read -r -p "  Select an option [1-7]: " choice
+  handle_choice "$choice"
+done
+```
+</details>
     clear
     echo "  ╔══════════════════════════════════════════════════════╗"
     echo "  ║          💾 BACKUP WORLD                            ║"
