@@ -54,14 +54,12 @@ ls -la "$INSTALL_ROOT"
 echo ""
 echo "=== Downloading latest Bedrock Dedicated Server ==="
 
-DOWNLOAD_PAGE="https://www.minecraft.net/en-us/download/server/bedrock"
-# Grab the download URL for Linux from the official page
-DOWNLOAD_URL=$(curl -sL "$DOWNLOAD_PAGE" | grep -oP 'https://[^"]+bedrock-server-[^"]+\.zip' | head -1)
+API_URL="https://net-secondary.web.minecraft-services.net/api/v1.0/download/links"
+DOWNLOAD_URL=$(curl -sL "$API_URL" | jq -r '.result.links[] | select(.downloadType == "serverBedrockLinux") | .downloadUrl')
 
-if [[ -z "$DOWNLOAD_URL" ]]; then
-  echo "ERROR: Could not find download URL. Trying fallback..."
-  # Fallback: known current URL pattern (update as needed)
-  DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-1.21.70.03.zip"
+if [[ -z "$DOWNLOAD_URL" || "$DOWNLOAD_URL" == "null" ]]; then
+  echo "ERROR: Could not find download URL from API."
+  exit 1
 fi
 
 echo "Download URL: $DOWNLOAD_URL"
@@ -75,6 +73,8 @@ rm bedrock-server.zip
 
 chmod +x bedrock_server
 
+# Extract version from the zip filename (e.g. bedrock-server-1.26.32.2.zip)
+INSTALLED_VERSION=$(echo "$DOWNLOAD_URL" | grep -oP '\d+\.\d+\.\d+\.\d+')
 echo ""
 echo "=== Bedrock server installed successfully ==="
-echo "Version: $(strings bedrock_server | grep -oP '^\d+\.\d+\.\d+\.\d+' | head -1 || echo 'unknown')"
+echo "Version: ${INSTALLED_VERSION:-unknown}"

@@ -16,17 +16,15 @@ VERSIONS_INDEX_URL="https://raw.githubusercontent.com/Bedrock-OSS/BDSVerse/main/
 # Fetch latest download URL from Mojang
 # ──────────────────────────────────────────────
 fetch_latest_url() {
-  local page
-  page=$(curl -sL "https://www.minecraft.net/en-us/download/server/bedrock")
+  local api_url="https://net-secondary.web.minecraft-services.net/api/v1.0/download/links"
   local url
-  url=$(echo "$page" | grep -oP 'https://[^"]+bedrock-server-[^"]+\.zip' | head -1)
+  url=$(curl -sL "$api_url" | jq -r '.result.links[] | select(.downloadType == "serverBedrockLinux") | .downloadUrl')
 
-  if [[ -z "$url" ]]; then
-    # Fallback URL pattern
-    url="https://minecraft.azureedge.net/bin-linux/bedrock-server-1.21.70.03.zip"
+  if [[ -z "$url" || "$url" == "null" ]]; then
+    echo ""
+  else
+    echo "$url"
   fi
-
-  echo "$url"
 }
 
 # ──────────────────────────────────────────────
