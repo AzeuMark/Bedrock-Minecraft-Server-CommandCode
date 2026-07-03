@@ -11,3 +11,6 @@
 # cli-ui
 - Use clean terminal output (echo/printf/read) instead of whiptail dialog boxes for CLI management interfaces. Confidence: 0.85
 
+# cli-commands
+- Format setup/deployment commands as single-line semicolon-separated chains (`cmd1; cmd2; cmd3`) for easy copy-paste execution instead of listing individual commands on separate lines. Confidence: 0.70
+
