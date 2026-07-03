@@ -65,7 +65,7 @@ fi
 echo "Download URL: $DOWNLOAD_URL"
 
 cd "$SERVER_DIR"
-curl -# -o bedrock-server.zip "$DOWNLOAD_URL"
+curl -# -L --http1.1 -o bedrock-server.zip "$DOWNLOAD_URL"
 
 echo "Extracting..."
 unzip -o bedrock-server.zip
