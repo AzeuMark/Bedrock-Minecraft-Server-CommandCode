@@ -90,8 +90,10 @@ handle_choice() {
       read -r -p "  Press Enter to return..."
       ;;
     4)
+      # Parent ignores Ctrl+C, child runs with default signal handling
+      # so tail -f can be killed by Ctrl+C without killing the menu
       trap '' INT
-      bash "$SCRIPTS_DIR/logs.sh" tail
+      (trap - INT; exec bash "$SCRIPTS_DIR/logs.sh" tail)
       trap - INT
       ;;
     5)

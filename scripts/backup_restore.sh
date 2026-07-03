@@ -114,9 +114,15 @@ menu_restore() {
   done
 
   echo ""
-  read -r -p "  Select backup [1-$((i-1))]: " choice
+  read -r -p "  Select backup [1-$((i-1))] (or press 0 / Enter to cancel): " choice
 
-  if [[ -z "$choice" || "$choice" -lt 1 || "$choice" -ge "$i" ]]; then
+  if [[ "$choice" == "0" || -z "$choice" ]]; then
+    echo "  Cancelled."
+    read -r -p "  Press Enter to return..."
+    return
+  fi
+
+  if [[ "$choice" -lt 1 || "$choice" -ge "$i" ]]; then
     echo "  Invalid selection."
     read -r -p "  Press Enter to return..."
     return

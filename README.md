@@ -986,7 +986,7 @@ handle_choice() {
     1) bash "$SCRIPTS_DIR/server_actions.sh" start; read -r -p "  Press Enter to return..." ;;
     2) bash "$SCRIPTS_DIR/server_actions.sh" stop; read -r -p "  Press Enter to return..." ;;
     3) bash "$SCRIPTS_DIR/server_actions.sh" restart; read -r -p "  Press Enter to return..." ;;
-    4) trap '' INT; bash "$SCRIPTS_DIR/logs.sh" tail; trap - INT ;;
+    4) trap '' INT; (trap - INT; exec bash "$SCRIPTS_DIR/logs.sh" tail); trap - INT ;;
     5) backup_menu ;;
     6) bash "$SCRIPTS_DIR/versions.sh"; echo ""; read -r -p "  Press Enter to return..." ;;
     7) clear; echo ""; echo "  👋 Goodbye!"; echo ""; exit 0 ;;
@@ -1393,8 +1393,9 @@ menu_restore() {
   echo "  Available backups:"; echo ""
   local i=1
   for f in "${folders[@]}"; do printf "  %2d) %s\n" "$i" "$f"; i=$((i+1)); done
-  echo ""; read -r -p "  Select backup [1-$((i-1))]: " choice
-  [[ -z "$choice" || "$choice" -lt 1 || "$choice" -ge "$i" ]] && { echo "  Invalid."; read -r -p "  Press Enter to return..."; return; }
+  echo ""; read -r -p "  Select backup [1-$((i-1))] (0 / Enter to cancel): " choice
+  [[ "$choice" == "0" || -z "$choice" ]] && { echo "  Cancelled."; read -r -p "  Press Enter to return..."; return; }
+  [[ "$choice" -lt 1 || "$choice" -ge "$i" ]] && { echo "  Invalid."; read -r -p "  Press Enter to return..."; return; }
   do_restore "${folders[$((choice-1))]}"
   read -r -p "  Press Enter to return..."
 }
