@@ -189,9 +189,8 @@ if [[ ! -d "$SERVER_DIR/worlds" ]]; then
   exit 1
 fi
 
-timestamp=$(date '+%m-%d-%Y-%I-%M-%S%p')
-backup_name="${timestamp}"
-backup_local_path="$BACKUPS_DIR/${backup_name}.tar.gz"
+folder_name="Auto_$(date '+%B-%d-%Y_%H-%M-%S')"
+remote_path="${GDRIVE_BACKUPS_PATH}/${folder_name}"
 
 was_running=false
 if server_is_running; then
@@ -201,16 +200,19 @@ if server_is_running; then
   sleep 2
 fi
 
-cd "$SERVER_DIR"
-tar -czf "$backup_local_path" "worlds" 2>/dev/null
+rclone copy "$SERVER_DIR/worlds" "$remote_path" 2>/dev/null
 
-if [[ $? -ne 0 ]]; then
-  log_error "Auto-backup: compression failed."
-  if $was_running; then
-    state_set_on
-    systemctl start "$SERVICE_NAME"
-  fi
-  exit 1
+if [[ $? -eq 0 ]]; then
+  log_info "Auto-backup completed: $folder_name"
+else
+  log_error "Auto-backup upload failed"
+fi
+
+if $was_running; then
+  state_set_on
+  systemctl start "$SERVICE_NAME"
+fi
+RUNNER
 fi
 
 rclone copy "$backup_local_path" "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null

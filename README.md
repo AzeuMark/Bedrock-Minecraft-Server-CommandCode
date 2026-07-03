@@ -929,57 +929,39 @@ load_config
 #
 # mc-menu.sh — Modern terminal dashboard for Minecraft Bedrock Server Manager.
 # Installed to /usr/local/bin/mc and /usr/local/bin/minecraft.
-# Auto-refreshes every second. Press a number key to select an action.
+# The status panel refreshes every second while the menu stays static.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-# ──────────────────────────────────────────────
-# First-run detection
-# ──────────────────────────────────────────────
 check_first_run() {
   if ! is_server_installed; then
     clear
     echo "  ╔══════════════════════════════════════════════════════╗"
     echo "  ║       🎮 MINECRAFT BEDROCK SERVER MANAGER          ║"
     echo "  ╚══════════════════════════════════════════════════════╝"
-    echo ""
-    echo "  ⚠ No Minecraft Bedrock server detected."
-    echo "  Let's install one first."
-    echo ""
+    echo ""; echo "  ⚠ No Minecraft Bedrock server detected."
+    echo "  Let's install one first."; echo ""
     read -r -p "  Press Enter to continue..."
     bash "$SCRIPTS_DIR/versions.sh" install
     if ! is_server_installed; then
-      echo ""; echo "  ✗ Installation failed or was cancelled."
-      read -r -p "  Press Enter to exit..."; exit 1
+      echo ""; echo "  ✗ Installation failed."; read -r -p "  Press Enter to exit..."; exit 1
     fi
   fi
 }
 
-# ──────────────────────────────────────────────
-# Draw the dashboard
-# ──────────────────────────────────────────────
-draw_dashboard() {
+move_to() { printf "\033[%s;1H" "$1"; }
+clear_line() { printf "\033[2K"; }
+
+draw_static_frame() {
   clear
-  local icon status ver ram ip port players max_players
-  icon=$(get_status_icon); status=$(get_status_text)
-  ver=$(get_server_version); ram=$(get_ram_usage)
-  ip=$(get_server_ip); port=$(get_server_port)
-  players=$(get_player_count); max_players=$(get_max_players)
-
-  local status_emoji="🔴"
-  server_is_running && status_emoji="🟢"
-
   echo "  ╔══════════════════════════════════════════════════════╗"
   echo "  ║       🎮 MINECRAFT BEDROCK SERVER MANAGER          ║"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo ""
-  echo "    ${status_emoji} ${icon} Status  : ${status}"
-  echo "    📦 Version   : ${ver}"
-  echo "    🧑 Players   : ${players} / ${max_players}"
-  echo "    💾 RAM       : ${ram}"
-  echo "    🌐 IP        : ${ip}"
-  echo "    🔌 Port      : ${port}"
+  echo "    status_line_1"; echo "    status_line_2"
+  echo "    status_line_3"; echo "    status_line_4"
+  echo "    status_line_5"; echo "    status_line_6"
   echo ""
   echo "  ═══════════════════════════════════════════════════════"
   echo ""
@@ -990,8 +972,24 @@ draw_dashboard() {
   echo "    5  💾  BACKUP WORLD"
   echo "    6  📡  CHECK FOR UPDATES"
   echo "    7  🚪  EXIT"
-  echo ""
-  echo "  ═══════════════════════════════════════════════════════"
+  echo ""; echo "  ═══════════════════════════════════════════════════════"
+}
+
+refresh_status_lines() {
+  local icon status ver ram ip port players max_players
+  icon=$(get_status_icon); status=$(get_status_text)
+  ver=$(get_server_version); ram=$(get_ram_usage)
+  ip=$(get_server_ip); port=$(get_server_port)
+  players=$(get_player_count); max_players=$(get_max_players)
+  local e="🔴"; server_is_running && e="🟢"
+
+  move_to 6; clear_line; echo "    ${e} ${icon} Status  : ${status}"
+  move_to 7; clear_line; echo "    📦 Version   : ${ver}"
+  move_to 8; clear_line; echo "    🧑 Players   : ${players} / ${max_players}"
+  move_to 9; clear_line; echo "    💾 RAM       : ${ram}"
+  move_to 10; clear_line; echo "    🌐 IP        : ${ip}"
+  move_to 11; clear_line; echo "    🔌 Port      : ${port}"
+  move_to 22
 }
 
 handle_choice() {
@@ -1000,11 +998,12 @@ handle_choice() {
     1) bash "$SCRIPTS_DIR/server_actions.sh" start; read -r -p "  Press Enter to return..." ;;
     2) bash "$SCRIPTS_DIR/server_actions.sh" stop; read -r -p "  Press Enter to return..." ;;
     3) bash "$SCRIPTS_DIR/server_actions.sh" restart; read -r -p "  Press Enter to return..." ;;
-    4) trap '' INT; bash "$SCRIPTS_DIR/logs.sh" tail; trap - INT ;;
+    4) trap '' INT; bash "$SCRIPTS_DIR/logs.sh" tail; trap - INT; draw_static_frame ;;
     5) backup_menu ;;
     6) bash "$SCRIPTS_DIR/versions.sh"; echo ""; read -r -p "  Press Enter to return..." ;;
     7) clear; echo ""; echo "  👋 Goodbye!"; echo ""; exit 0 ;;
   esac
+  draw_static_frame; refresh_status_lines
 }
 
 backup_menu() {
@@ -1013,11 +1012,9 @@ backup_menu() {
     echo "  ╔══════════════════════════════════════════════════════╗"
     echo "  ║          💾 BACKUP WORLD                            ║"
     echo "  ╚══════════════════════════════════════════════════════╝"
-    echo ""; echo "  ⚠ Google Drive is not connected."; echo "  Backups require Google Drive."; echo ""
-    read -r -p "  Set up Google Drive now? (y/N): " setup_gd
-    if [[ "$setup_gd" == "y" || "$setup_gd" == "Y" ]]; then
-      bash "$SCRIPTS_DIR/gdrive_setup.sh"
-      if ! is_gdrive_connected; then echo ""; echo "  ✗ Google Drive setup was not completed."; read -r -p "  Press Enter to return..."; return; fi
+    echo ""; echo "  ⚠ Google Drive is not connected."; echo ""; read -r -p "  Set up now? (y/N): " g
+    if [[ "$g" == "y" || "$g" == "Y" ]]; then bash "$SCRIPTS_DIR/gdrive_setup.sh"
+      if ! is_gdrive_connected; then echo ""; echo "  ✗ Not completed."; read -r -p "  Enter..."; return; fi
     else return; fi
   fi
   while true; do
@@ -1025,25 +1022,20 @@ backup_menu() {
     echo "  ╔══════════════════════════════════════════════════════╗"
     echo "  ║          💾 BACKUP WORLD                            ║"
     echo "  ╚══════════════════════════════════════════════════════╝"
-    echo ""; echo "    1  📤  BACKUP NOW    2  📥  RESTORE    3  ⏰  AUTO    4  🔙  BACK"; echo ""
-    read -r -p "  Select an option [1-4]: " c
+    echo ""; echo "    1  📤  BACKUP    2  📥  RESTORE    3  ⏰  AUTO    4  🔙  BACK"; echo ""
+    read -r -p "  Option [1-4]: " c
     case "$c" in
-      1) bash "$SCRIPTS_DIR/backup_now.sh"; read -r -p "  Press Enter to return..." ;;
-      2) bash "$SCRIPTS_DIR/backup_restore.sh"; read -r -p "  Press Enter to return..." ;;
-      3) bash "$SCRIPTS_DIR/backup_auto.sh"; read -r -p "  Press Enter to return..." ;;
+      1) bash "$SCRIPTS_DIR/backup_now.sh"; read -r -p "  Enter..." ;;
+      2) bash "$SCRIPTS_DIR/backup_restore.sh"; read -r -p "  Enter..." ;;
+      3) bash "$SCRIPTS_DIR/backup_auto.sh"; read -r -p "  Enter..." ;;
       *) return ;;
     esac
   done
 }
 
-# ──────────────────────────────────────────────
-# Main loop — auto-refreshes every 1 second
-# ──────────────────────────────────────────────
-check_first_run
-
+check_first_run; draw_static_frame; refresh_status_lines
 while true; do
-  draw_dashboard
-  read -rsn1 -t1 choice
+  read -rsn1 -t1 choice; refresh_status_lines
   [[ -n "$choice" ]] && handle_choice "$choice"
 done
 ```
@@ -1266,55 +1258,51 @@ fi
 ```bash
 #!/bin/bash
 #
-# backup_now.sh — Create a manual backup of the world to Google Drive.
+# backup_now.sh — Manual world backup to Google Drive.
+# Uses rclone copy (no compression). Stops server, copies worlds/ directly
+# to a dated folder on Drive, then restarts.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-if ! is_gdrive_connected; then echo "  Google Drive is not connected."; exit 1; fi
-if [[ ! -d "$SERVER_DIR/worlds" ]]; then echo "  No worlds directory."; exit 1; fi
+if ! is_gdrive_connected; then
+  echo "  Google Drive is not connected."
+  read -r -p "  Press Enter to return..."; exit 1
+fi
+if [[ ! -d "$SERVER_DIR/worlds" ]]; then
+  echo "  No worlds directory found."; read -r -p "  Press Enter to return..."; exit 1
+fi
 
-echo ""; read -r -p "  Add an optional note (leave blank): " note
-[[ -n "$note" ]] && note="-$(echo "$note" | sed 's/ /-/g; s/[^a-zA-Z0-9_-]//g')"
+echo ""
+read -r -p "  Enter a note for this backup (optional): " note
+if [[ -n "$note" ]]; then
+  note_clean=$(echo "$note" | tr ' ' '-' | sed 's/[^a-zA-Z0-9_-]//g')
+  folder_name="Manual_$(date '+%B-%d-%Y_%H-%M-%S')_${note_clean}"
+else
+  folder_name="Backup_$(date '+%B-%d-%Y_%H-%M-%S')"
+fi
+remote_path="${GDRIVE_BACKUPS_PATH}/${folder_name}"
+echo "  Backing up to: ${remote_path}"
 
-timestamp=$(date '+%m-%d-%Y-%I-%M-%S%p')
-backup_name="${timestamp}${note}"
-backup_local_path="$BACKUPS_DIR/${backup_name}.tar.gz"
+was_running=false
+if server_is_running; then
+  was_running=true; echo "  Stopping server..."; systemctl stop "$SERVICE_NAME"; sleep 2
+fi
 
-do_backup() {
-  local was_running=false
-  if server_is_running; then
-    was_running=true; echo "  Stopping server..."; systemctl stop "$SERVICE_NAME"; sleep 2
-  fi
+echo "  Uploading worlds to Google Drive..."
+rclone copy "$SERVER_DIR/worlds" "$remote_path" --progress 2>/dev/null
 
-  echo "  Compressing world..."; mkdir -p "$BACKUPS_DIR"
-  cd "$SERVER_DIR"; tar -czf "$backup_local_path" "worlds" 2>/dev/null
-  if [[ $? -ne 0 ]]; then
-    echo "  ✗ Failed to compress world."; log_error "Backup compression failed."
-    if $was_running; then state_set_on; systemctl start "$SERVICE_NAME"; fi; return 1
-  fi
+if [[ $? -eq 0 ]]; then
+  echo ""; echo "  ✓ Backup complete! → ${remote_path}"
+  log_info "Backup created: $folder_name"
+else
+  echo ""; echo "  ✗ Upload failed. Check connectivity."
+  log_error "Backup upload failed"
+fi
 
-  echo "  Uploading to Google Drive..."
-  local upload_ok=false; local retries=0
-  while [[ $retries -lt 3 ]]; do
-    if rclone copy "$backup_local_path" "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null; then
-      upload_ok=true; break
-    fi
-    retries=$((retries + 1)); [[ $retries -lt 3 ]] && echo "  Upload failed, retrying ($retries/3)..." && sleep 2
-  done
-
-  if $upload_ok; then
-    rm -f "$backup_local_path"; echo ""; echo "  ✓ Backup complete! $backup_name"
-    log_info "Backup created and uploaded: $backup_name"
-  else
-    echo ""; echo "  ✗ Upload failed after 3 attempts. Local copy kept at $backup_local_path"
-    log_error "Backup upload failed, kept local copy"
-  fi
-
-  if $was_running; then echo "  Restarting server..."; state_set_on; systemctl start "$SERVICE_NAME"; sleep 2; fi
-}
-
-do_backup
+if $was_running; then
+  echo "  Restarting server..."; state_set_on; systemctl start "$SERVICE_NAME"; sleep 2
+fi
 ```
 </details>
 
@@ -1324,14 +1312,20 @@ do_backup
 ```bash
 #!/bin/bash
 #
-# backup_restore.sh — List backups on Google Drive and restore one.
+# backup_restore.sh — Restore a world backup from Google Drive.
+# Lists backup folders on Drive, lets you pick one, restores it.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-if ! is_gdrive_connected; then echo "  Google Drive is not connected."; exit 1; fi
+if ! is_gdrive_connected; then
+  echo "  Google Drive is not connected."
+  read -r -p "  Press Enter to return..."; exit 1
+fi
 
-list_drive_backups() { rclone lsf "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null | sort; }
+list_backup_folders() {
+  rclone lsd "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null | awk '{for(i=5;i<=NF;i++) printf "%s ", $i; print ""}' | sed 's/[[:space:]]*$//'
+}
 
 validate_world() {
   local dir="$1"
@@ -1341,73 +1335,57 @@ validate_world() {
   return 0
 }
 
-download_and_validate() {
-  local backup_name="$1"; local tmp_dir; tmp_dir=$(mktemp -d)
-  echo "  Downloading backup..."; rclone copy "${GDRIVE_BACKUPS_PATH}/${backup_name}" "$tmp_dir/" 2>/dev/null
-  local backup_file="$tmp_dir/$backup_name"
-  [[ ! -f "$backup_file" ]] && { echo "  ✗ Failed to download."; rm -rf "$tmp_dir"; return 1; }
-
-  echo "  Validating backup..."; local check_dir; check_dir=$(mktemp -d)
-  tar -xzf "$backup_file" -C "$check_dir" 2>/dev/null
-
-  local valid=false
-  if [[ -d "$check_dir/worlds" ]]; then
-    for w in "$check_dir/worlds"/*/; do [[ -d "$w" ]] && validate_world "$w" && { valid=true; break; }; done
-  elif [[ -d "$check_dir" ]]; then
-    if [[ -f "$check_dir/level.dat" ]]; then validate_world "$check_dir" && valid=true
-    else for w in "$check_dir"/*/; do [[ -d "$w" ]] && validate_world "$w" && { valid=true; break; }; done; fi
-  fi
-
-  rm -rf "$check_dir"
-  if ! $valid; then echo "  ✗ Backup invalid or corrupted."; rm -rf "$tmp_dir"; return 1; fi
-  echo "$tmp_dir"; return 0
-}
-
 do_restore() {
-  local backup_name="$1" was_running=false
-  echo ""; echo "  Selected: $backup_name"; read -r -p "  Overwrite current world? (y/N): " confirm
+  local selected_display="$1" was_running=false
+  echo ""; echo "  Selected: $selected_display"
+  read -r -p "  Overwrite current world? (y/N): " confirm
   [[ "$confirm" != "y" && "$confirm" != "Y" ]] && { echo "  Cancelled."; return; }
 
-  if server_is_running; then was_running=true; echo "  Stopping server..."; systemctl stop "$SERVICE_NAME"; sleep 2; fi
+  if server_is_running; then
+    was_running=true; echo "  Stopping server..."; systemctl stop "$SERVICE_NAME"; sleep 2
+  fi
 
-  local result; result=$(download_and_validate "$backup_name")
+  echo "  Removing old world..."; rm -rf "$SERVER_DIR/worlds"
+  echo "  Downloading backup..."
+  rclone copy "${GDRIVE_BACKUPS_PATH}/${selected_display}" "$SERVER_DIR/worlds" --progress 2>/dev/null
+
   if [[ $? -ne 0 ]]; then
+    echo "  ✗ Download failed."; log_error "Restore download failed"
     if $was_running; then state_set_on; systemctl start "$SERVICE_NAME"; fi; return
   fi
 
-  local tmp_dir="$result"; local backup_file="$tmp_dir/$backup_name"
-  echo "  Backup validated."
+  echo "  Fixing permissions..."; chmod -R 755 "$SERVER_DIR/worlds" 2>/dev/null
 
-  local world_bak="${BACKUPS_DIR}/pre-restore-$(date '+%m-%d-%Y-%I-%M-%S%p').tar.gz"
-  [[ -d "$SERVER_DIR/worlds" ]] && cd "$SERVER_DIR" && tar -czf "$world_bak" "worlds" 2>/dev/null
+  echo "  Validating..."
+  local found_valid=false
+  for w in "$SERVER_DIR/worlds"/*/; do
+    if [[ -d "$w" ]]; then
+      if validate_world "$w"; then
+        echo "    ✓ $(basename "$w") — valid"; found_valid=true
+      else
+        echo "    ⚠ $(basename "$w") — may be incomplete"
+      fi
+    fi
+  done
+  ! $found_valid && echo "  ⚠ No valid worlds found."
 
-  rm -rf "$SERVER_DIR/worlds"; cd "$SERVER_DIR"; tar -xzf "$backup_file" 2>/dev/null
-  if [[ $? -ne 0 ]]; then
-    echo "  ✗ Extraction failed."; log_error "Restore extraction failed"; rm -rf "$tmp_dir"
-    if $was_running; then state_set_on; systemctl start "$SERVICE_NAME"; fi; return
-  fi
-
-  echo "  ✓ Backup restored."; log_info "Restored backup: $backup_name"
-  echo "  Worlds:"; for w in "$SERVER_DIR/worlds"/*/; do [[ -d "$w" ]] && echo "    - $(basename "$w")"; done
-  rm -rf "$tmp_dir"
-  if $was_running; then echo "  Restarting server..."; state_set_on; systemctl start "$SERVICE_NAME"; sleep 2; fi
+  log_info "Restored: $selected_display"
   echo ""; echo "  ✓ Restore complete!"
-  [[ -f "$world_bak" ]] && echo "  Previous world saved as: $(basename "$world_bak")"
+  if $was_running; then echo "  Restarting server..."; state_set_on; systemctl start "$SERVICE_NAME"; sleep 2; fi
 }
 
 menu_restore() {
-  echo "  Fetching backups..."; local backups; backups=$(list_drive_backups)
-  [[ -z "$backups" ]] && { echo "  No backups found."; return; }
+  echo "  Fetching backups..."; echo ""
+  mapfile -t folders < <(list_backup_folders)
+  [[ ${#folders[@]} -eq 0 ]] && { echo "  No backups found."; read -r -p "  Press Enter to return..."; return; }
 
-  echo ""; echo "  Available backups:"; echo ""
-  local names=(); local i=1
-  while IFS= read -r file; do
-    names+=("$file"); printf "  %2d) %s\n" "$i" "${file%.tar.gz}"; i=$((i + 1))
-  done <<< "$backups"
-
+  echo "  Available backups:"; echo ""
+  local i=1
+  for f in "${folders[@]}"; do printf "  %2d) %s\n" "$i" "$f"; i=$((i+1)); done
   echo ""; read -r -p "  Select backup [1-$((i-1))]: " choice
-  [[ -z "$choice" || "$choice" -lt 1 || "$choice" -ge "$i" ]] && { echo "  Invalid."; return; }
-  do_restore "${names[$((choice-1))]}"
+  [[ -z "$choice" || "$choice" -lt 1 || "$choice" -ge "$i" ]] && { echo "  Invalid."; read -r -p "  Press Enter to return..."; return; }
+  do_restore "${folders[$((choice-1))]}"
+  read -r -p "  Press Enter to return..."
 }
 
 menu_restore
@@ -1464,17 +1442,28 @@ configure_auto_backup() {
   cat > "$SERVICE_UNIT" << 'UNIT'
 [Unit]
 Description=Minecraft Bedrock Server Auto-Backup
-After=network-online.target;Wants=network-online.target
+After=network-online.target
+Wants=network-online.target
+
 [Service]
-Type=oneshot;User=root;ExecStart=/opt/mcbedrock/scripts/backup_auto_runner.sh
-[Install];WantedBy=multi-user.target
+Type=oneshot
+User=root
+ExecStart=/opt/mcbedrock/scripts/backup_auto_runner.sh
+
+[Install]
+WantedBy=multi-user.target
 UNIT
 
   cat > "$TIMER_UNIT" << TIMER
 [Unit]
 Description=Minecraft Bedrock Server Auto-Backup (every ${interval}h)
-[Timer];OnBootSec=10min;OnUnitActiveSec=${interval}h;Persistent=true
-[Install];WantedBy=timers.target
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=${interval}h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
 TIMER
 
   systemctl daemon-reload; systemctl enable mcbedrock-autobackup.timer 2>/dev/null
@@ -1505,15 +1494,13 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 if ! is_gdrive_connected; then log_error "Auto-backup skipped: no Drive."; exit 1; fi
 if [[ ! -d "$SERVER_DIR/worlds" ]]; then log_error "Auto-backup skipped: no worlds."; exit 1; fi
-ts=$(date '+%m-%d-%Y-%I-%M-%S%p'); local_path="$BACKUPS_DIR/${ts}.tar.gz"
+folder_name="Auto_$(date '+%B-%d-%Y_%H-%M-%S')"
+remote_path="${GDRIVE_BACKUPS_PATH}/${folder_name}"
 was_running=false
 if server_is_running; then was_running=true; systemctl stop "$SERVICE_NAME"; sleep 2; fi
-cd "$SERVER_DIR"; tar -czf "$local_path" "worlds" 2>/dev/null
-if [[ $? -ne 0 ]]; then log_error "Compression failed."
-  if $was_running; then state_set_on; systemctl start "$SERVICE_NAME"; fi; exit 1; fi
-rclone copy "$local_path" "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null
-if [[ $? -eq 0 ]]; then rm -f "$local_path"; log_info "Auto-backup: $ts"
-else log_error "Auto-backup: upload failed"; fi
+rclone copy "$SERVER_DIR/worlds" "$remote_path" 2>/dev/null
+if [[ $? -eq 0 ]]; then log_info "Auto-backup: $folder_name"
+else log_error "Auto-backup upload failed"; fi
 if $was_running; then state_set_on; systemctl start "$SERVICE_NAME"; fi
 RUNNER
   chmod +x "$AUTO_SCRIPT"
