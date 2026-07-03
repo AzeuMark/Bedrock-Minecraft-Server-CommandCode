@@ -46,6 +46,7 @@ cat > "$SERVICE_FILE" << 'UNIT'
 [Unit]
 Description=Minecraft Bedrock Dedicated Server
 After=network.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -56,7 +57,8 @@ ExecStart=/opt/mcbedrock/server/bedrock_server
 StandardOutput=append:/opt/mcbedrock/logs/server.log
 StandardError=append:/opt/mcbedrock/logs/server.log
 Restart=on-failure
-RestartSec=10
+RestartSec=5
+StandardInput=null
 
 [Install]
 WantedBy=multi-user.target
@@ -78,3 +80,9 @@ echo "Auto-start on boot: $(systemctl is-enabled mcbedrock 2>/dev/null || echo '
 echo ""
 echo "You can now start the server using the 'mc' menu or:"
 echo "  systemctl start mcbedrock"
+echo ""
+echo "NOTE: If using DigitalOcean, you MUST also allow port 19132/udp"
+echo "in the DigitalOcean Cloud Firewall section of your dashboard."
+echo ""
+echo "  → Go to: Networking → Firewalls → Edit → Inbound Rules"
+echo "  → Add: Custom UDP port 19132"
