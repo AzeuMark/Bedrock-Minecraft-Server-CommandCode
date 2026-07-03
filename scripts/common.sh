@@ -18,6 +18,7 @@ CONFIG_FILE="$CONFIG_DIR/mc.conf"
 STATE_FILE="$CONFIG_DIR/server.state"
 SERVICE_NAME="mcbedrock"
 LOG_FILE="$LOGS_DIR/server.log"
+FIFO_PATH="$SERVER_DIR/console.fifo"
 
 GDRIVE_REMOTE="gdrive"
 GDRIVE_BACKUPS_PATH="${GDRIVE_REMOTE}:Minecraft/Backups"

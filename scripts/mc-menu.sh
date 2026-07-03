@@ -64,7 +64,8 @@ draw_dashboard() {
   echo "    4  📋  VIEW LOGS"
   echo "    5  💾  BACKUP WORLD"
   echo "    6  📡  CHECK FOR UPDATES"
-  echo "    7  🚪  EXIT"
+  echo "    7  ⌨  SEND COMMAND"
+  echo "    8  🚪  EXIT"
   echo ""
   echo "  ═══════════════════════════════════════════════════════"
   echo ""
@@ -104,6 +105,18 @@ handle_choice() {
       echo ""; read -r -p "  Press Enter to return..."
       ;;
     7)
+      clear
+      echo "  Type a command to send to the server console."
+      echo "  Common commands: stop, list, say Hello, kick PlayerName"
+      echo "  Leave empty and press Enter to cancel."
+      echo ""
+      read -r -p "  Command: " cmd
+      if [[ -n "$cmd" ]]; then
+        bash "$SCRIPTS_DIR/send_command.sh" "$cmd"
+      fi
+      read -r -p "  Press Enter to return..."
+      ;;
+    8)
       clear; echo ""; echo "  👋 Goodbye!"; echo ""; exit 0
       ;;
   esac
@@ -154,6 +167,6 @@ check_first_run
 while true; do
   clear
   draw_dashboard
-  read -r -p "  Select an option [1-7]: " choice
+  read -r -p "  Select an option [1-8]: " choice
   handle_choice "$choice"
 done

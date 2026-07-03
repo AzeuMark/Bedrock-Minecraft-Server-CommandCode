@@ -138,12 +138,14 @@ journalctl -u mcbedrock -n 20 && sudo ufw status verbose
 | `common.sh` | Shared helpers — paths, state, config, status gatherers |
 | `mc-menu.sh` | Dashboard entry point |
 | `server_actions.sh` | Start / Stop / Restart |
-| `logs.sh` | Live tail or last 500 lines |
+| `logs.sh` | Live tail |
 | `versions.sh` | Check for Bedrock updates |
 | `backup_now.sh` | Manual backup to Google Drive |
 | `backup_restore.sh` | Restore from Drive (with validation) |
-| `backup_auto.sh` | Schedule automatic backups (interval + timezone) |
+| `backup_auto.sh` | Schedule automatic backups |
 | `gdrive_setup.sh` | Re-run Google Drive setup from menu |
+| `send_command.sh` | Send in-game commands to server console |
+| `bedrock_wrapper.sh` | Internal wrapper for FIFO console I/O |
 
 ### Folder structure
 
@@ -976,7 +978,8 @@ draw_dashboard() {
   echo "    4  📋  VIEW LOGS"
   echo "    5  💾  BACKUP WORLD"
   echo "    6  📡  CHECK FOR UPDATES"
-  echo "    7  🚪  EXIT"
+  echo "    7  ⌨  SEND COMMAND"
+  echo "    8  🚪  EXIT"
   echo ""; echo "  ═══════════════════════════════════════════════════════" ; echo ""
 }
 
@@ -989,7 +992,15 @@ handle_choice() {
     4) trap '' INT; (trap - INT; exec bash "$SCRIPTS_DIR/logs.sh" tail); trap - INT ;;
     5) backup_menu ;;
     6) bash "$SCRIPTS_DIR/versions.sh"; echo ""; read -r -p "  Press Enter to return..." ;;
-    7) clear; echo ""; echo "  👋 Goodbye!"; echo ""; exit 0 ;;
+    7) 
+      clear
+      echo "  Type a command to send to the server console."
+      echo "  Examples: stop, list, say Hello, kick PlayerName"
+      echo "  Leave empty and press Enter to cancel."; echo ""
+      read -r -p "  Command: " cmd
+      [[ -n "$cmd" ]] && bash "$SCRIPTS_DIR/send_command.sh" "$cmd"
+      read -r -p "  Press Enter to return..." ;;
+    8) clear; echo ""; echo "  👋 Goodbye!"; echo ""; exit 0 ;;
   esac
 }
 
@@ -1024,7 +1035,7 @@ backup_menu() {
 check_first_run
 while true; do
   clear; draw_dashboard
-  read -r -p "  Select an option [1-7]: " choice
+  read -r -p "  Select an option [1-8]: " choice
   handle_choice "$choice"
 done
 ```
@@ -1567,3 +1578,30 @@ setup_gdrive() {
 setup_gdrive
 ```
 </details>
+
+<details>
+<summary>scripts/send_command.sh</summary>
+
+```bash
+#!/bin/bash
+# send_command.sh — Send a command to the Minecraft server console.
+# Usage: send_command.sh "<command>"
+
+FIFO="/opt/mcbedrock/server/console.fifo"
+
+if [[ $# -eq 0 ]]; then
+  echo "Usage: $0 \"<command>\""
+  echo "Example: $0 \"say Hello\""
+  exit 1
+fi
+
+if [[ ! -p "$FIFO" ]]; then
+  echo "Console FIFO not found (server may not be running)."
+  exit 1
+fi
+
+echo "$1" > "$FIFO"
+echo "✓ Command sent: $1"
+```
+</details>
+</tool_result>
