@@ -2,6 +2,7 @@
 #
 # mc-menu.sh — Modern terminal dashboard for Minecraft Bedrock Server Manager.
 # Installed to /usr/local/bin/mc and /usr/local/bin/minecraft.
+# Auto-refreshes every second. Press a number key to select an action.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
@@ -12,18 +13,18 @@ source "$SCRIPT_DIR/common.sh"
 check_first_run() {
   if ! is_server_installed; then
     clear
-    echo "============================================"
-    echo "  MINECRAFT BEDROCK SERVER MANAGER"
-    echo "============================================"
+    echo "  ╔══════════════════════════════════════════════════════╗"
+    echo "  ║       🎮 MINECRAFT BEDROCK SERVER MANAGER          ║"
+    echo "  ╚══════════════════════════════════════════════════════╝"
     echo ""
-    echo "  No Minecraft Bedrock server detected."
+    echo "  ⚠ No Minecraft Bedrock server detected."
     echo "  Let's install one first."
     echo ""
     read -r -p "  Press Enter to continue..."
     bash "$SCRIPTS_DIR/versions.sh" install
     if ! is_server_installed; then
       echo ""
-      echo "  Installation failed or was cancelled."
+      echo "  ✗ Installation failed or was cancelled."
       read -r -p "  Press Enter to exit..."
       exit 1
     fi
@@ -46,28 +47,36 @@ draw_dashboard() {
   players=$(get_player_count)
   max_players=$(get_max_players)
 
+  # Choose status emoji
+  local status_emoji
+  if server_is_running; then
+    status_emoji="🟢"
+  else
+    status_emoji="🔴"
+  fi
+
   echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║         MINECRAFT BEDROCK SERVER MANAGER            ║"
+  echo "  ║       🎮 MINECRAFT BEDROCK SERVER MANAGER          ║"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo ""
-  echo "    ${icon} Status  : ${status}"
-  printf "    Version  : %s\n" "$ver"
-  printf "    Players  : %s / %s\n" "$players" "$max_players"
-  printf "    RAM      : %s\n" "$ram"
-  printf "    IP Address: %s\n" "$ip"
-  printf "    PORT      : %s\n" "$port"
+  echo "    ${status_emoji} ${icon} Status  : ${status}"
+  echo "    📦 Version   : ${ver}"
+  echo "    🧑 Players   : ${players} / ${max_players}"
+  echo "    💾 RAM       : ${ram}"
+  echo "    🌐 IP        : ${ip}"
+  echo "    🔌 Port      : ${port}"
   echo ""
-  echo "  ───────────────────────────────────────────────────────"
+  echo "  ═══════════════════════════════════════════════════════"
   echo ""
-  echo "    1)  START SERVER"
-  echo "    2)  STOP SERVER"
-  echo "    3)  RESTART SERVER"
-  echo "    4)  VIEW LOGS"
-  echo "    5)  BACKUP WORLD"
-  echo "    6)  CHECK FOR UPDATES"
-  echo "    7)  EXIT"
+  echo "    1  ▶  START SERVER"
+  echo "    2  ⏹  STOP SERVER"
+  echo "    3  🔄  RESTART SERVER"
+  echo "    4  📋  VIEW LOGS"
+  echo "    5  💾  BACKUP WORLD"
+  echo "    6  📡  CHECK FOR UPDATES"
+  echo "    7  🚪  EXIT"
   echo ""
-  echo "  ───────────────────────────────────────────────────────"
+  echo "  ═══════════════════════════════════════════════════════"
   echo ""
 }
 
@@ -80,15 +89,21 @@ handle_choice() {
   case "$choice" in
     1)
       bash "$SCRIPTS_DIR/server_actions.sh" start
+      read -r -p "  Press Enter to return..."
       ;;
     2)
       bash "$SCRIPTS_DIR/server_actions.sh" stop
+      read -r -p "  Press Enter to return..."
       ;;
     3)
       bash "$SCRIPTS_DIR/server_actions.sh" restart
+      read -r -p "  Press Enter to return..."
       ;;
     4)
+      # Run logs with SIGINT ignored so Ctrl+C only kills tail, not the menu
+      trap '' INT
       bash "$SCRIPTS_DIR/logs.sh" tail
+      trap - INT
       ;;
     5)
       backup_menu
@@ -96,18 +111,14 @@ handle_choice() {
     6)
       bash "$SCRIPTS_DIR/versions.sh"
       echo ""
-      read -r -p "  Press Enter to return to menu..."
+      read -r -p "  Press Enter to return..."
       ;;
     7)
       clear
       echo ""
-      echo "  Goodbye!"
+      echo "  👋 Goodbye!"
       echo ""
       exit 0
-      ;;
-    *)
-      echo "  Invalid option. Press Enter to try again."
-      read -r
       ;;
   esac
 }
@@ -116,14 +127,13 @@ handle_choice() {
 # Backup sub-menu
 # ──────────────────────────────────────────────
 backup_menu() {
-  # If gdrive not connected, offer setup
   if ! is_gdrive_connected; then
     clear
     echo "  ╔══════════════════════════════════════════════════════╗"
-    echo "  ║                 BACKUP WORLD                        ║"
+    echo "  ║          💾 BACKUP WORLD                            ║"
     echo "  ╚══════════════════════════════════════════════════════╝"
     echo ""
-    echo "  Google Drive is not connected."
+    echo "  ⚠ Google Drive is not connected."
     echo "  Backups require Google Drive."
     echo ""
     read -r -p "  Set up Google Drive now? (y/N): " setup_gd
@@ -131,7 +141,7 @@ backup_menu() {
       bash "$SCRIPTS_DIR/gdrive_setup.sh"
       if ! is_gdrive_connected; then
         echo ""
-        echo "  Google Drive setup was not completed."
+        echo "  ✗ Google Drive setup was not completed."
         read -r -p "  Press Enter to return..."
         return
       fi
@@ -140,46 +150,54 @@ backup_menu() {
     fi
   fi
 
-  clear
-  echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║                 BACKUP WORLD                        ║"
-  echo "  ╚══════════════════════════════════════════════════════╝"
-  echo ""
-  echo "    1)  BACKUP NOW"
-  echo "    2)  RESTORE BACKUP"
-  echo "    3)  AUTO BACKUP (schedule)"
-  echo "    4)  BACK"
-  echo ""
-  echo "  ───────────────────────────────────────────────────────"
-  echo ""
-  read -r -p "  Select an option [1-4]: " choice
+  while true; do
+    clear
+    echo "  ╔══════════════════════════════════════════════════════╗"
+    echo "  ║          💾 BACKUP WORLD                            ║"
+    echo "  ╚══════════════════════════════════════════════════════╝"
+    echo ""
+    echo "    1  📤  BACKUP NOW"
+    echo "    2  📥  RESTORE BACKUP"
+    echo "    3  ⏰  AUTO BACKUP"
+    echo "    4  🔙  BACK"
+    echo ""
+    echo "  ═══════════════════════════════════════════════════════"
+    echo ""
+    read -r -p "  Select an option [1-4]: " choice
 
-  case "$choice" in
-    1)
-      bash "$SCRIPTS_DIR/backup_now.sh"
-      ;;
-    2)
-      bash "$SCRIPTS_DIR/backup_restore.sh"
-      ;;
-    3)
-      bash "$SCRIPTS_DIR/backup_auto.sh"
-      ;;
-    *)
-      return
-      ;;
-  esac
-
-  read -r -p "  Press Enter to return to backup menu..."
-  backup_menu
+    case "$choice" in
+      1)
+        bash "$SCRIPTS_DIR/backup_now.sh"
+        read -r -p "  Press Enter to return..."
+        ;;
+      2)
+        bash "$SCRIPTS_DIR/backup_restore.sh"
+        read -r -p "  Press Enter to return..."
+        ;;
+      3)
+        bash "$SCRIPTS_DIR/backup_auto.sh"
+        read -r -p "  Press Enter to return..."
+        ;;
+      *)
+        return
+        ;;
+    esac
+  done
 }
 
 # ──────────────────────────────────────────────
-# Main loop
+# Main loop — auto-refreshes every 1 second
 # ──────────────────────────────────────────────
 check_first_run
 
 while true; do
   draw_dashboard
-  read -r -p "  Select an option [1-7]: " choice
-  handle_choice "$choice"
+
+  # Non-blocking input: waits up to 1 second for a single keypress
+  # If no key is pressed, the loop redraws (auto-refresh)
+  read -rsn1 -t1 choice
+
+  if [[ -n "$choice" ]]; then
+    handle_choice "$choice"
+  fi
 done
