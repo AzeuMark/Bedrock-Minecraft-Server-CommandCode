@@ -114,20 +114,17 @@ create_runner() {
 #!/bin/bash
 #
 # backup_auto_runner.sh — Called by systemd timer for automatic daily backups.
-# Checks server.state: if OFF, backs up safely without starting server.
-# If ON, uses save hold/save resume for clean snapshot.
+# Stops server if running, backs up worlds, uploads to Drive, restarts if was running.
 # Deletes local tarball after successful upload to Drive.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-# Abort if no gdrive connection
 if ! is_gdrive_connected; then
   log_error "Auto-backup skipped: Google Drive not connected."
   exit 1
 fi
 
-# Abort if no worlds directory
 if [[ ! -d "$SERVER_DIR/worlds" ]]; then
   log_error "Auto-backup skipped: no worlds directory."
   exit 1
@@ -141,11 +138,9 @@ was_running=false
 
 if server_is_running; then
   was_running=true
-  log_info "Auto-backup: pausing world saves..."
-  server_command "save hold"
+  log_info "Auto-backup: stopping server..."
+  systemctl stop "$SERVICE_NAME"
   sleep 2
-  server_command "save query"
-  sleep 1
 fi
 
 cd "$SERVER_DIR"
@@ -154,13 +149,10 @@ tar -czf "$backup_local_path" "worlds" 2>/dev/null
 if [[ $? -ne 0 ]]; then
   log_error "Auto-backup: compression failed."
   if $was_running; then
-    server_command "save resume"
+    state_set_on
+    systemctl start "$SERVICE_NAME"
   fi
   exit 1
-fi
-
-if $was_running; then
-  server_command "save resume"
 fi
 
 rclone copy "$backup_local_path" "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null
@@ -170,7 +162,11 @@ if [[ $? -eq 0 ]]; then
   log_info "Auto-backup completed and uploaded: $backup_name"
 else
   log_error "Auto-backup: upload failed, kept local copy at $backup_local_path"
-  exit 1
+fi
+
+if $was_running; then
+  state_set_on
+  systemctl start "$SERVICE_NAME"
 fi
 RUNNER
 

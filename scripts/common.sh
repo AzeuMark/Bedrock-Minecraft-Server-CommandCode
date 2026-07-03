@@ -16,8 +16,6 @@ SETUP_DIR="$INSTALL_ROOT/setup"
 
 CONFIG_FILE="$CONFIG_DIR/mc.conf"
 STATE_FILE="$CONFIG_DIR/server.state"
-VERSIONS_CACHE="$CONFIG_DIR/versions.json"
-FIFO_PATH="$SERVER_DIR/console.fifo"
 SERVICE_NAME="mcbedrock"
 
 GDRIVE_REMOTE="gdrive"
@@ -172,17 +170,6 @@ server_status_text() {
     echo "● RUNNING"
   else
     echo "○ STOPPED"
-  fi
-}
-
-# ──────────────────────────────────────────────
-# Send command to running server (via FIFO)
-# ──────────────────────────────────────────────
-server_command() {
-  local cmd="$1"
-  if server_is_running && [[ -p "$FIFO_PATH" ]]; then
-    echo "$cmd" > "$FIFO_PATH"
-    log_info "Sent command to server: $cmd"
   fi
 }
 

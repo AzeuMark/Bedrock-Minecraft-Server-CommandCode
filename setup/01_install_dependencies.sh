@@ -15,14 +15,8 @@ echo "=== Installing dependencies ==="
 
 apt update
 
-# whiptail — for the TUI menus
-# rclone — for Google Drive backups
-# curl, wget — for downloading Bedrock server
-# unzip — Bedrock server comes as a zip
-# jq — for parsing version JSON (if we cache versions)
-# systemd — should already be present on Ubuntu
-apt install -y whiptail rclone curl wget unzip jq systemd
+apt install -y whiptail rclone curl wget unzip jq libssl-dev
 
 echo ""
 echo "=== Dependencies installed successfully ==="
-echo "whiptail, rclone, curl, wget, unzip, jq, systemd"
+echo "whiptail, rclone, curl, wget, unzip, jq, libssl-dev"

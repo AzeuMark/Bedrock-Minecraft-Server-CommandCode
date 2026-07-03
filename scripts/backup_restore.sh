@@ -42,11 +42,8 @@ Continue?"; then
   if server_is_running; then
     was_running=true
     infobox "Stopping server..."
-    server_command "say Server is being restored from backup..."
-    server_command "stop"
-    sleep 2
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    sleep 1
+    sleep 2
   fi
 
   infobox "Downloading backup from Google Drive..."

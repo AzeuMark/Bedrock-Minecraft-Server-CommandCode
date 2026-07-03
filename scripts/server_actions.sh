@@ -20,15 +20,22 @@ do_start() {
   systemctl enable "$SERVICE_NAME" 2>/dev/null
   systemctl start "$SERVICE_NAME"
 
-  # Wait a moment then check
-  sleep 2
+  sleep 3
   if server_is_running; then
     msgbox "Server started successfully.
 Auto-start on boot is now ENABLED."
     log_info "Server started, auto-start enabled."
   else
-    msgbox "Server failed to start. Check logs for details."
-    log_error "Server start failed."
+    local err_log
+    err_log=$(journalctl -u "$SERVICE_NAME" --no-pager -n 10 2>/dev/null)
+    whiptail --title "$(menu_title)" --msgbox "\
+Server failed to start.
+
+Recent log entries from journalctl:
+${err_log:-(no journal output)}
+
+Check /opt/mcbedrock/logs/server.log for details." 15 65
+    log_error "Server start failed. Journalctl output: $err_log"
   fi
 }
 
@@ -48,20 +55,13 @@ Continue?"; then
     return
   fi
 
-  # Send clean stop command via console
-  server_command "stop"
+  systemctl stop "$SERVICE_NAME"
 
-  # Wait for graceful shutdown
   local waited=0
-  while server_is_running && [[ $waited -lt 30 ]]; do
+  while server_is_running && [[ $waited -lt 15 ]]; do
     sleep 1
     waited=$((waited + 1))
   done
-
-  # Force stop if still running
-  if server_is_running; then
-    systemctl stop "$SERVICE_NAME"
-  fi
 
   state_set_off
   systemctl disable "$SERVICE_NAME" 2>/dev/null
@@ -77,23 +77,14 @@ do_restart() {
     return
   fi
 
-  server_command "say Server is restarting..."
-  server_command "stop"
-
-  local waited=0
-  while server_is_running && [[ $waited -lt 30 ]]; do
-    sleep 1
-    waited=$((waited + 1))
-  done
-
   systemctl restart "$SERVICE_NAME"
 
-  sleep 2
+  sleep 3
   if server_is_running; then
     msgbox "Server restarted successfully."
     log_info "Server restarted."
   else
-    msgbox "Restart failed. Check logs."
+    msgbox "Restart failed. Check logs with 'View Logs' for details."
     log_error "Server restart failed."
   fi
 }
@@ -112,16 +103,18 @@ do_status() {
     state_text="OFF (will NOT auto-start on boot)"
   fi
 
-  local version_text="${CURRENT_VERSION:-not set}"
+  local pid
+  pid=$(systemctl show -p MainPID "$SERVICE_NAME" 2>/dev/null | cut -d= -f2)
+  local uptime
+  uptime=$(systemctl show -p ActiveEnterTimestamp "$SERVICE_NAME" 2>/dev/null | cut -d= -f2 || echo 'N/A')
 
   whiptail --title "$(menu_title)" --msgbox "\
 Server Status: $running_text
 Server State:  $state_text
-Version:       $version_text
+Version:       ${CURRENT_VERSION:-not set}
 
-PID: $(systemctl show -p MainPID "$SERVICE_NAME" 2>/dev/null | cut -d= -f2)
-Memory: $(systemctl show -p MemoryCurrent "$SERVICE_NAME" 2>/dev/null | cut -d= -f2 || echo 'N/A')
-Uptime: $(systemctl show -p ActiveEnterTimestamp "$SERVICE_NAME" 2>/dev/null | cut -d= -f2 || echo 'N/A')" 14 55
+PID: ${pid:-N/A}
+Uptime: $uptime" 12 55
 }
 
 # ──────────────────────────────────────────────
