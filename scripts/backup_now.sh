@@ -1,27 +1,26 @@
 #!/bin/bash
 #
 # backup_now.sh — Create a manual backup of the world to Google Drive.
-# Stops server if running → compresses worlds → uploads to Drive → restarts if was running.
-# Deletes local tarball after successful upload. Keeps + warns if upload fails.
+# Stops server if running, compresses worlds, uploads to Drive, restarts.
+# Deletes local tarball after successful upload.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 if ! is_gdrive_connected; then
-  msgbox "Google Drive is not connected.
-Use 'Backups → Connect Google Drive' first."
+  echo "  Google Drive is not connected."
+  echo "  Use BACKUP WORLD menu option to set it up."
   exit 1
 fi
 
 if [[ ! -d "$SERVER_DIR/worlds" ]]; then
-  msgbox "No worlds directory found at $SERVER_DIR/worlds. Nothing to backup."
+  echo "  No worlds directory found at $SERVER_DIR/worlds."
+  echo "  Nothing to backup."
   exit 1
 fi
 
-# Ask for optional note
-note=$(inputbox "Add an optional note for this backup
-(e.g., \"before-update\", leave blank to skip):")
-
+echo ""
+read -r -p "  Add an optional note (leave blank to skip): " note
 if [[ -n "$note" ]]; then
   note=$(echo "$note" | sed 's/ /-/g; s/[^a-zA-Z0-9_-]//g')
   note="-$note"
@@ -36,19 +35,18 @@ do_backup() {
 
   if server_is_running; then
     was_running=true
-    infobox "Stopping server to create backup..."
+    echo "  Stopping server for backup..."
     systemctl stop "$SERVICE_NAME"
     sleep 2
   fi
 
-  infobox "Compressing world... ($backup_name)"
-
+  echo "  Compressing world..."
   mkdir -p "$BACKUPS_DIR"
   cd "$SERVER_DIR"
   tar -czf "$backup_local_path" "worlds" 2>/dev/null
 
   if [[ $? -ne 0 ]]; then
-    msgbox "Failed to compress world."
+    echo "  ✗ Failed to compress world."
     log_error "Backup compression failed."
     if $was_running; then
       state_set_on
@@ -57,26 +55,38 @@ do_backup() {
     return 1
   fi
 
-  infobox "Uploading to Google Drive..."
-  rclone copy "$backup_local_path" "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null
+  echo "  Uploading to Google Drive..."
 
-  if [[ $? -eq 0 ]]; then
+  local upload_ok=false
+  local retries=0
+  while [[ $retries -lt 3 ]]; do
+    if rclone copy "$backup_local_path" "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null; then
+      upload_ok=true
+      break
+    fi
+    retries=$((retries + 1))
+    if [[ $retries -lt 3 ]]; then
+      echo "  Upload failed, retrying ($retries/3)..."
+      sleep 2
+    fi
+  done
+
+  if $upload_ok; then
     rm -f "$backup_local_path"
+    echo ""
+    echo "  ✓ Backup complete!"
+    echo "    $backup_name"
     log_info "Backup created and uploaded: $backup_name"
-    msgbox "✓ Backup complete!
-
-Name: $backup_name"
   else
-    log_error "Backup upload failed, kept local copy at $backup_local_path"
-    msgbox "WARNING: Upload to Google Drive FAILED.
-
-Local backup saved at:
-$backup_local_path
-
-Check your internet connection and auth, then re-run backup."
+    echo ""
+    echo "  ✗ Upload to Google Drive FAILED after 3 attempts."
+    echo "  Local backup saved at: $backup_local_path"
+    echo "  Check your internet and auth, then re-run backup."
+    log_error "Backup upload failed, kept local copy"
   fi
 
   if $was_running; then
+    echo "  Restarting server..."
     state_set_on
     systemctl start "$SERVICE_NAME"
     sleep 2

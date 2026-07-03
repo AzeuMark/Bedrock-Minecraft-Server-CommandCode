@@ -1,8 +1,7 @@
 #!/bin/bash
 #
-# mc-menu.sh — Main entry point for the Minecraft Bedrock Server Manager.
+# mc-menu.sh — Modern terminal dashboard for Minecraft Bedrock Server Manager.
 # Installed to /usr/local/bin/mc and /usr/local/bin/minecraft.
-# Sources common.sh, routes to sub-menus.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
@@ -12,70 +11,159 @@ source "$SCRIPT_DIR/common.sh"
 # ──────────────────────────────────────────────
 check_first_run() {
   if ! is_server_installed; then
-    whiptail --title "$(menu_title)" --msgbox "\
-No Minecraft Bedrock server detected.
-
-The server binary was not found.
-Let's install one first." 10 50
-
-    # Run versions install and re-check
-    bash "$SCRIPTS_DIR/versions.sh" install_latest
-
+    clear
+    echo "============================================"
+    echo "  MINECRAFT BEDROCK SERVER MANAGER"
+    echo "============================================"
+    echo ""
+    echo "  No Minecraft Bedrock server detected."
+    echo "  Let's install one first."
+    echo ""
+    read -r -p "  Press Enter to continue..."
+    bash "$SCRIPTS_DIR/versions.sh" install
     if ! is_server_installed; then
-      msgbox "Installation failed or was cancelled. Exiting."
+      echo ""
+      echo "  Installation failed or was cancelled."
+      read -r -p "  Press Enter to exit..."
       exit 1
     fi
   fi
 }
 
 # ──────────────────────────────────────────────
-# Main menu
+# Draw the dashboard
 # ──────────────────────────────────────────────
-main_menu() {
-  local status_msg
-  status_msg="Status: $(server_status_text)  |  Version: ${CURRENT_VERSION:-not set}"
+draw_dashboard() {
+  clear
 
-  # Add auto-backup info if configured
-  if [[ -n "$AUTO_BACKUP_HOUR" && -n "$AUTO_BACKUP_AMPM" ]]; then
-    status_msg="$status_msg  |  Auto: ${AUTO_BACKUP_HOUR}:00 ${AUTO_BACKUP_AMPM}"
-  fi
+  local icon status ver ram ip port players max_players
+  icon=$(get_status_icon)
+  status=$(get_status_text)
+  ver=$(get_server_version)
+  ram=$(get_ram_usage)
+  ip=$(get_server_ip)
+  port=$(get_server_port)
+  players=$(get_player_count)
+  max_players=$(get_max_players)
 
-  local choice
-  choice=$(show_menu "\
-$status_msg
+  echo "  ╔══════════════════════════════════════════════════════╗"
+  echo "  ║         MINECRAFT BEDROCK SERVER MANAGER            ║"
+  echo "  ╚══════════════════════════════════════════════════════╝"
+  echo ""
+  echo "    ${icon} Status  : ${status}"
+  printf "    Version  : %s\n" "$ver"
+  printf "    Players  : %s / %s\n" "$players" "$max_players"
+  printf "    RAM      : %s\n" "$ram"
+  printf "    Address  : %s:%s\n" "$ip" "$port"
+  echo ""
+  echo "  ───────────────────────────────────────────────────────"
+  echo ""
+  echo "    1)  START SERVER"
+  echo "    2)  STOP SERVER"
+  echo "    3)  RESTART SERVER"
+  echo "    4)  VIEW LOGS"
+  echo "    5)  BACKUP WORLD"
+  echo "    6)  CHECK FOR UPDATES"
+  echo "    7)  EXIT"
+  echo ""
+  echo "  ───────────────────────────────────────────────────────"
+  echo ""
+}
 
-Select an action:" \
-    "1" "Server Actions  (Start/Stop/Restart)" \
-    "2" "Backups" \
-    "3" "Versions" \
-    "4" "View Logs" \
-    "5" "Exit")
+# ──────────────────────────────────────────────
+# Handle menu choice
+# ──────────────────────────────────────────────
+handle_choice() {
+  local choice="$1"
 
   case "$choice" in
-    1) bash "$SCRIPTS_DIR/server_actions.sh" ;;
-    2) backups_menu ;;
-    3) bash "$SCRIPTS_DIR/versions.sh" ;;
-    4) bash "$SCRIPTS_DIR/logs.sh" ;;
-    5) exit 0 ;;
-    *) exit 0 ;;
+    1)
+      bash "$SCRIPTS_DIR/server_actions.sh" start
+      ;;
+    2)
+      bash "$SCRIPTS_DIR/server_actions.sh" stop
+      ;;
+    3)
+      bash "$SCRIPTS_DIR/server_actions.sh" restart
+      ;;
+    4)
+      logs_menu
+      ;;
+    5)
+      backup_menu
+      ;;
+    6)
+      bash "$SCRIPTS_DIR/versions.sh"
+      ;;
+    7)
+      clear
+      echo ""
+      echo "  Goodbye!"
+      echo ""
+      exit 0
+      ;;
+    *)
+      echo "  Invalid option. Press Enter to try again."
+      read -r
+      ;;
   esac
 }
 
 # ──────────────────────────────────────────────
-# Backups sub-menu
+# Logs sub-menu
 # ──────────────────────────────────────────────
-backups_menu() {
-  # If gdrive not connected, offer to set it up
+logs_menu() {
+  clear
+  echo "  ╔══════════════════════════════════════════════════════╗"
+  echo "  ║                   VIEW LOGS                        ║"
+  echo "  ╚══════════════════════════════════════════════════════╝"
+  echo ""
+  echo "    1)  LIVE TAIL (real-time)"
+  echo "    2)  LAST 500 LINES"
+  echo "    3)  BACK"
+  echo ""
+  echo "  ───────────────────────────────────────────────────────"
+  echo ""
+  read -r -p "  Select an option [1-3]: " choice
+
+  case "$choice" in
+    1)
+      bash "$SCRIPTS_DIR/logs.sh" tail
+      # After tail -f exits (Ctrl+C), just return to dashboard
+      return
+      ;;
+    2)
+      bash "$SCRIPTS_DIR/logs.sh" last500
+      read -r -p "  Press Enter to return to logs menu..."
+      logs_menu
+      ;;
+    *)
+      return
+      ;;
+  esac
+}
+
+# ──────────────────────────────────────────────
+# Backup sub-menu
+# ──────────────────────────────────────────────
+backup_menu() {
+  # If gdrive not connected, offer setup
   if ! is_gdrive_connected; then
-    if yesno "Google Drive is not connected.
-
-Backups require a Google Drive connection.
-
-Would you like to set it up now?"; then
+    clear
+    echo "  ╔══════════════════════════════════════════════════════╗"
+    echo "  ║                 BACKUP WORLD                        ║"
+    echo "  ╚══════════════════════════════════════════════════════╝"
+    echo ""
+    echo "  Google Drive is not connected."
+    echo "  Backups require Google Drive."
+    echo ""
+    read -r -p "  Set up Google Drive now? (y/N): " setup_gd
+    if [[ "$setup_gd" == "y" || "$setup_gd" == "Y" ]]; then
       bash "$SCRIPTS_DIR/gdrive_setup.sh"
-      # If still not connected after setup, go back
       if ! is_gdrive_connected; then
-        msgbox "Google Drive setup was not completed. Returning to main menu."
+        echo ""
+        echo "  Google Drive setup was not completed."
+        read -r -p "  Press Enter to return..."
         return
       fi
     else
@@ -83,26 +171,46 @@ Would you like to set it up now?"; then
     fi
   fi
 
-  local choice
-  choice=$(show_menu "Backups — Google Drive: ✓ Connected" \
-    "1" "Backup Now" \
-    "2" "Restore" \
-    "3" "Automatic Backup" \
-    "4" "Back")
+  clear
+  echo "  ╔══════════════════════════════════════════════════════╗"
+  echo "  ║                 BACKUP WORLD                        ║"
+  echo "  ╚══════════════════════════════════════════════════════╝"
+  echo ""
+  echo "    1)  BACKUP NOW"
+  echo "    2)  RESTORE BACKUP"
+  echo "    3)  AUTO BACKUP (schedule)"
+  echo "    4)  BACK"
+  echo ""
+  echo "  ───────────────────────────────────────────────────────"
+  echo ""
+  read -r -p "  Select an option [1-4]: " choice
 
   case "$choice" in
-    1) bash "$SCRIPTS_DIR/backup_now.sh" ;;
-    2) bash "$SCRIPTS_DIR/backup_restore.sh" ;;
-    3) bash "$SCRIPTS_DIR/backup_auto.sh" ;;
-    *) return ;;
+    1)
+      bash "$SCRIPTS_DIR/backup_now.sh"
+      ;;
+    2)
+      bash "$SCRIPTS_DIR/backup_restore.sh"
+      ;;
+    3)
+      bash "$SCRIPTS_DIR/backup_auto.sh"
+      ;;
+    *)
+      return
+      ;;
   esac
+
+  read -r -p "  Press Enter to return to backup menu..."
+  backup_menu
 }
 
 # ──────────────────────────────────────────────
-# Entry point
+# Main loop
 # ──────────────────────────────────────────────
 check_first_run
 
 while true; do
-  main_menu
+  draw_dashboard
+  read -r -p "  Select an option [1-7]: " choice
+  handle_choice "$choice"
 done

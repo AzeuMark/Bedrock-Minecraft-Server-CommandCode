@@ -1,76 +1,55 @@
 #!/bin/bash
 #
-# logs.sh — View and tail Minecraft Bedrock server logs
+# logs.sh — View server logs.
+# Usage: logs.sh {tail|last500}
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-LOG_FILE="$LOGS_DIR/server.log"
-
-# ──────────────────────────────────────────────
-# Ensure log file exists
-# ──────────────────────────────────────────────
-ensure_log() {
-  if [[ ! -f "$LOG_FILE" ]]; then
-    touch "$LOG_FILE"
-  fi
-}
-
-# ──────────────────────────────────────────────
-# Live tail (real-time)
-# ──────────────────────────────────────────────
-view_tail() {
+do_tail() {
   if ! server_is_running; then
-    msgbox "Server is not running. Nothing to tail."
+    echo "  Server is not running. Nothing to tail."
+    echo "  You can still view the last 500 lines from the logs menu."
     return
   fi
 
-  # Use a temporary file to capture tail output, since whiptail can't do live scrollback
-  # We'll show a scrolling view in the terminal
   clear
-  echo "=== Minecraft Bedrock Server Log — LIVE TAIL ==="
-  echo "Press Ctrl+C to stop viewing."
+  echo "  ╔══════════════════════════════════════════════════════╗"
+  echo "  ║               LIVE LOG — Press Ctrl+C to stop       ║"
+  echo "  ╚══════════════════════════════════════════════════════╝"
   echo ""
   tail -f "$LOG_FILE"
-  # After Ctrl+C, we return to the menu
 }
 
-# ──────────────────────────────────────────────
-# View last N lines
-# ──────────────────────────────────────────────
-view_last() {
-  ensure_log
-  local lines="${1:-100}"
+do_last500() {
+  clear
+  echo "  ╔══════════════════════════════════════════════════════╗"
+  echo "  ║                LAST 500 LINES                       ║"
+  echo "  ╚══════════════════════════════════════════════════════╝"
+  echo ""
 
-  # Pipe last N lines into whiptail's textbox
-  tail -n "$lines" "$LOG_FILE" > /tmp/mcbedrock_log_tail.txt 2>/dev/null
+  if [[ ! -f "$LOG_FILE" ]]; then
+    echo "  No log file found yet."
+    return
+  fi
 
-  whiptail --title "$(menu_title) — Last $lines Lines" \
-    --textbox /tmp/mcbedrock_log_tail.txt 20 70
-
-  rm -f /tmp/mcbedrock_log_tail.txt
+  # Use less for scrollable viewing, fallback to cat
+  if command -v less &>/dev/null; then
+    tail -n 500 "$LOG_FILE" | less
+  else
+    tail -n 500 "$LOG_FILE"
+  fi
 }
 
-# ──────────────────────────────────────────────
-# Menu
-# ──────────────────────────────────────────────
-menu_logs() {
-  local choice
-  choice=$(show_menu "Server Logs ($(server_status_text))" \
-    "1" "Live Tail (real-time)" \
-    "2" "View Last 100 Lines" \
-    "3" "View Last 500 Lines" \
-    "4" "Back")
-
-  case "$choice" in
-    1) view_tail ;;
-    2) view_last 100 ;;
-    3) view_last 500 ;;
-    *) return ;;
-  esac
-}
-
-# ──────────────────────────────────────────────
-# Run
-# ──────────────────────────────────────────────
-menu_logs
+case "${1}" in
+  tail)
+    do_tail
+    ;;
+  last500)
+    do_last500
+    ;;
+  *)
+    echo "Usage: $0 {tail|last500}"
+    exit 1
+    ;;
+esac

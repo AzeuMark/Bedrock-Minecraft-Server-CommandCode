@@ -1,74 +1,144 @@
 #!/bin/bash
 #
 # backup_restore.sh — List backups on Google Drive and restore one.
-# Stops the server if running, downloads + extracts the chosen backup
-# into the worlds/ folder, then restarts if it was running before.
+# Validates the downloaded backup is a valid world before restoring.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-# ──────────────────────────────────────────────
-# Check prerequisites
-# ──────────────────────────────────────────────
 if ! is_gdrive_connected; then
-  msgbox "Google Drive is not connected."
+  echo "  Google Drive is not connected."
   exit 1
 fi
 
-# ──────────────────────────────────────────────
-# List backups on Drive
-# ──────────────────────────────────────────────
 list_drive_backups() {
   rclone lsf "${GDRIVE_BACKUPS_PATH}/" 2>/dev/null | sort
 }
 
-# ──────────────────────────────────────────────
-# Restore
-# ──────────────────────────────────────────────
+validate_world() {
+  local dir="$1"
+  # A valid Bedrock world has a level.dat and a db/ directory (LevelDB format)
+  if [[ ! -f "$dir/level.dat" ]]; then
+    return 1
+  fi
+  if [[ ! -d "$dir/db" ]]; then
+    return 1
+  fi
+  local count
+  count=$(find "$dir/db" -type f 2>/dev/null | wc -l)
+  if [[ "$count" -eq 0 ]]; then
+    return 1
+  fi
+  return 0
+}
+
+download_and_validate() {
+  local backup_name="$1"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+
+  echo "  Downloading backup from Google Drive..."
+  rclone copy "${GDRIVE_BACKUPS_PATH}/${backup_name}" "$tmp_dir/" 2>/dev/null
+
+  local backup_file="$tmp_dir/$backup_name"
+  if [[ ! -f "$backup_file" ]]; then
+    echo "  ✗ Failed to download backup."
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  echo "  Validating backup..."
+  local check_dir
+  check_dir=$(mktemp -d)
+  tar -xzf "$backup_file" -C "$check_dir" 2>/dev/null
+
+  if [[ -d "$check_dir/worlds" ]]; then
+    # Multiple worlds bundled
+    local valid=false
+    for w in "$check_dir/worlds"/*/; do
+      if [[ -d "$w" ]] && validate_world "$w"; then
+        valid=true
+        break
+      fi
+    done
+    if ! $valid; then
+      echo "  ✗ Backup appears invalid or corrupted (no valid worlds found)."
+      rm -rf "$tmp_dir" "$check_dir"
+      return 1
+    fi
+  elif [[ -d "$check_dir" ]]; then
+    # Single world or worlds dir directly
+    local found_valid=false
+    if [[ -f "$check_dir/level.dat" ]]; then
+      if validate_world "$check_dir"; then
+        found_valid=true
+      fi
+    else
+      for w in "$check_dir"/*/; do
+        if [[ -d "$w" ]] && validate_world "$w"; then
+          found_valid=true
+          break
+        fi
+      done
+    fi
+    if ! $found_valid; then
+      echo "  ✗ Backup appears invalid or corrupted."
+      rm -rf "$tmp_dir" "$check_dir"
+      return 1
+    fi
+  else
+    echo "  ✗ Backup appears invalid or corrupted (unexpected structure)."
+    rm -rf "$tmp_dir" "$check_dir"
+    return 1
+  fi
+
+  rm -rf "$check_dir"
+  echo "$tmp_dir"
+  return 0
+}
+
 do_restore() {
   local backup_name="$1"
   local was_running=false
 
-  # Confirm
-  if ! yesno "Restore backup: $backup_name
-
-This will OVERWRITE your current world with the backup.
-Server will be stopped during restore.
-
-Continue?"; then
+  echo ""
+  echo "  Selected backup: $backup_name"
+  echo ""
+  echo "  This will OVERWRITE your current world."
+  read -r -p "  Continue? (y/N): " confirm
+  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "  Cancelled."
     return
   fi
 
   if server_is_running; then
     was_running=true
-    infobox "Stopping server..."
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    echo "  Stopping server..."
+    systemctl stop "$SERVICE_NAME"
     sleep 2
   fi
 
-  infobox "Downloading backup from Google Drive..."
-
-  local tmp_dir
-  tmp_dir=$(mktemp -d)
-  local backup_file="$tmp_dir/$backup_name"
-
-  rclone copy "${GDRIVE_BACKUPS_PATH}/${backup_name}" "$tmp_dir/" 2>/dev/null
-
-  if [[ ! -f "$backup_file" ]]; then
-    msgbox "Failed to download backup from Drive."
-    log_error "Restore failed: could not download $backup_name"
-    rm -rf "$tmp_dir"
+  # Download and validate
+  local result
+  result=$(download_and_validate "$backup_name")
+  if [[ $? -ne 0 ]]; then
+    echo ""
     if $was_running; then
+      state_set_on
       systemctl start "$SERVICE_NAME"
     fi
     return
   fi
 
-  infobox "Extracting world backup..."
+  local tmp_dir="$result"
+  local backup_file="$tmp_dir/$backup_name"
+
+  echo "  Backup validated successfully."
 
   # Backup current world just in case
-  local world_bak="${BACKUPS_DIR}/pre-restore-world-$(date '+%m-%d-%Y-%I-%M-%S%p').tar.gz"
+  local world_bak="${BACKUPS_DIR}/pre-restore-$(date '+%m-%d-%Y-%I-%M-%S%p').tar.gz"
   if [[ -d "$SERVER_DIR/worlds" ]]; then
+    echo "  Saving current world as safety backup..."
     cd "$SERVER_DIR"
     tar -czf "$world_bak" "worlds" 2>/dev/null
   fi
@@ -79,78 +149,77 @@ Continue?"; then
   tar -xzf "$backup_file" 2>/dev/null
 
   if [[ $? -ne 0 ]]; then
-    msgbox "Failed to extract backup. Your world was NOT modified."
-    log_error "Restore extraction failed for $backup_name"
+    echo "  ✗ Failed to extract backup."
+    log_error "Restore extraction failed"
     rm -rf "$tmp_dir"
     if $was_running; then
+      state_set_on
       systemctl start "$SERVICE_NAME"
     fi
     return
   fi
 
-  rm -rf "$tmp_dir"
+  echo "  ✓ Backup restored successfully."
   log_info "Restored backup: $backup_name"
 
-  if $was_running; then
-    # Only restart if the user had it running AND state is ON
-    if state_is_on; then
-      systemctl start "$SERVICE_NAME"
-      sleep 2
+  # Show the restored world
+  echo "  Worlds found:"
+  for w in "$SERVER_DIR/worlds"/*/; do
+    if [[ -d "$w" ]]; then
+      echo "    - $(basename "$w")"
     fi
+  done
+
+  rm -rf "$tmp_dir"
+
+  if $was_running; then
+    echo "  Restarting server..."
+    state_set_on
+    systemctl start "$SERVICE_NAME"
+    sleep 2
   fi
 
-  msgbox "✓ Restore complete!
-
-Backup: $backup_name
-was restored successfully.
-
-$([[ -f "$world_bak" ]] && echo "Previous world saved as: $world_bak")"
+  echo ""
+  echo "  ✓ Restore complete!"
+  [[ -f "$world_bak" ]] && echo "  Previous world saved as: $(basename "$world_bak")"
 }
 
-# ──────────────────────────────────────────────
-# Menu
-# ──────────────────────────────────────────────
 menu_restore() {
-  infobox "Fetching backup list from Google Drive..."
+  echo "  Fetching backup list from Google Drive..."
 
   local backups
   backups=$(list_drive_backups)
 
   if [[ -z "$backups" ]]; then
-    msgbox "No backups found on Google Drive.
-Check: ${GDRIVE_BACKUPS_PATH}/"
+    echo "  No backups found on Google Drive."
+    echo "  Check: ${GDRIVE_BACKUPS_PATH}/"
     return
   fi
 
-  # Build whiptail menu
-  local menu_items=()
+  echo ""
+  echo "  Available backups:"
+  echo ""
+
+  local names=()
   local i=1
   while IFS= read -r file; do
-    # Remove .tar.gz extension for display
-    local display_name="${file%.tar.gz}"
-    menu_items+=("$i" "$display_name")
+    local display="${file%.tar.gz}"
+    names+=("$file")
+    printf "  %2d) %s\n" "$i" "$display"
     i=$((i + 1))
   done <<< "$backups"
 
-  local choice
-  choice=$(show_menu "Select a backup to restore:" "${menu_items[@]}")
+  echo ""
+  read -r -p "  Select a backup to restore [1-$((i-1))]: " choice
 
-  if [[ -z "$choice" ]]; then
+  if [[ -z "$choice" || "$choice" -lt 1 || "$choice" -ge "$i" ]]; then
+    echo "  Invalid selection."
     return
   fi
 
-  # Map number back to filename
-  local selected_file
-  selected_file=$(echo "$backups" | sed -n "${choice}p")
-
-  if [[ -z "$selected_file" ]]; then
-    return
-  fi
-
-  do_restore "$selected_file"
+  local selected
+  selected="${names[$((choice-1))]}"
+  do_restore "$selected"
 }
 
-# ──────────────────────────────────────────────
-# Run
-# ──────────────────────────────────────────────
 menu_restore

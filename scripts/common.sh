@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# common.sh — Shared paths, state management, config loader, and UI helpers
+# common.sh — Shared paths, state management, config loader, and helpers.
 # Source this from any other script:  source "$(dirname "$(readlink -f "$0")")/common.sh"
 
 # ──────────────────────────────────────────────
@@ -17,6 +17,7 @@ SETUP_DIR="$INSTALL_ROOT/setup"
 CONFIG_FILE="$CONFIG_DIR/mc.conf"
 STATE_FILE="$CONFIG_DIR/server.state"
 SERVICE_NAME="mcbedrock"
+LOG_FILE="$LOGS_DIR/server.log"
 
 GDRIVE_REMOTE="gdrive"
 GDRIVE_BACKUPS_PATH="${GDRIVE_REMOTE}:Minecraft/Backups"
@@ -91,60 +92,97 @@ is_gdrive_connected() {
 }
 
 # ──────────────────────────────────────────────
-# whiptail helpers
+# Systemd wrapper
 # ──────────────────────────────────────────────
-menu_title() {
-  echo "Minecraft Bedrock Server Manager"
+server_is_running() {
+  systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null
 }
 
-yesno() {
-  local prompt="$1"
-  whiptail --title "$(menu_title)" --yesno "$prompt" 10 60
+# ──────────────────────────────────────────────
+# Dashboard info gatherers
+# ──────────────────────────────────────────────
+get_status_icon() {
+  if server_is_running; then
+    echo "●"
+  else
+    echo "○"
+  fi
 }
 
-msgbox() {
-  local msg="$1"
-  whiptail --title "$(menu_title)" --msgbox "$msg" 12 60
+get_status_text() {
+  if server_is_running; then
+    echo "RUNNING"
+  else
+    echo "STOPPED"
+  fi
 }
 
-infobox() {
-  local msg="$1"
-  whiptail --title "$(menu_title)" --infobox "$msg" 8 50
+get_server_version() {
+  echo "${CURRENT_VERSION:-not set}"
 }
 
-inputbox() {
-  local prompt="$1"
-  whiptail --title "$(menu_title)" --inputbox "$prompt" 10 60 3>&1 1>&2 2>&3
+get_ram_usage() {
+  local pid
+  pid=$(systemctl show -p MainPID "$SERVICE_NAME" 2>/dev/null | cut -d= -f2)
+  if [[ -n "$pid" && "$pid" -gt 1 ]]; then
+    local rss
+    rss=$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')
+    if [[ -n "$rss" ]]; then
+      # rss is in KB, convert to human
+      if (( rss > 1048576 )); then
+        echo "$(echo "scale=1; $rss/1048576" | bc)G"
+      elif (( rss > 1024 )); then
+        echo "$(echo "scale=1; $rss/1024" | bc)M"
+      else
+        echo "${rss}K"
+      fi
+    else
+      echo "N/A"
+    fi
+  else
+    echo "N/A"
+  fi
 }
 
-passwordbox() {
-  local prompt="$1"
-  whiptail --title "$(menu_title)" --passwordbox "$prompt" 10 60 3>&1 1>&2 2>&3
+get_server_ip() {
+  # Get the primary public IP
+  ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1
 }
 
-# Display a menu and return the selected item
-show_menu() {
-  local prompt="$1"
-  shift
-  whiptail --title "$(menu_title)" --menu "$prompt" 18 60 10 "$@" 3>&1 1>&2 2>&3
+get_server_port() {
+  local port
+  port=$(grep '^server-port=' "$SERVER_DIR/server.properties" 2>/dev/null | cut -d= -f2)
+  echo "${port:-19132}"
 }
 
-# Show a spinner while a command runs
-with_spinner() {
-  local msg="$1"
-  shift
-  (
-    eval "$@" &>/dev/null &
-    pid=$!
-    while kill -0 $pid 2>/dev/null; do
-      echo -n "."
-      sleep 0.5
-    done
-    wait $pid
-  ) &
-  spinner_pid=$!
-  whiptail --title "$(menu_title)" --infobox "$msg" 8 50
-  wait $spinner_pid
+get_player_count() {
+  if ! server_is_running; then
+    echo "0"
+    return
+  fi
+  local log_content
+  log_content=$(cat "$LOG_FILE" 2>/dev/null)
+  if [[ -z "$log_content" ]]; then
+    echo "0"
+    return
+  fi
+  # Count connected vs disconnected players from log
+  # Bedrock formats: "Player connected:" and "Player disconnected:"
+  local connected
+  connected=$(echo "$log_content" | grep -c "Player connected:" 2>/dev/null)
+  local disconnected
+  disconnected=$(echo "$log_content" | grep -c "Player disconnected:" 2>/dev/null)
+  local count=$((connected - disconnected))
+  if (( count < 0 )); then
+    count=0
+  fi
+  echo "$count"
+}
+
+get_max_players() {
+  local max
+  max=$(grep '^max-players=' "$SERVER_DIR/server.properties" 2>/dev/null | cut -d= -f2)
+  echo "${max:-10}"
 }
 
 # ──────────────────────────────────────────────
@@ -156,21 +194,6 @@ log_info() {
 
 log_error() {
   echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') - $*" >> "$LOGS_DIR/mcbedrock-manager.log"
-}
-
-# ──────────────────────────────────────────────
-# Systemd wrapper
-# ──────────────────────────────────────────────
-server_is_running() {
-  systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null
-}
-
-server_status_text() {
-  if server_is_running; then
-    echo "● RUNNING"
-  else
-    echo "○ STOPPED"
-  fi
 }
 
 # ──────────────────────────────────────────────
