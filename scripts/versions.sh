@@ -57,7 +57,7 @@ install_version() {
   tmp_dir=$(mktemp -d)
   cd "$tmp_dir"
 
-  if ! curl -sL --http1.1 -o bedrock-server.zip "$url"; then
+  if ! wget -O bedrock-server.zip "$url" 2>/dev/null; then
     msgbox "Download failed for version $version."
     log_error "Download failed for version $version from $url"
     cd /
