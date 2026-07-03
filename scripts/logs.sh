@@ -2,7 +2,7 @@
 #
 # logs.sh — View server logs (live tail).
 # Usage: logs.sh
-# Shows live log. Press q to exit (less +F).
+# Shows live log. Press Ctrl+C to exit.
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
@@ -16,17 +16,11 @@ do_tail() {
 
   clear
   echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║               LIVE LOG — Press q to exit            ║"
+  echo "  ║          LIVE LOG — Press Ctrl+C to exit            ║"
   echo "  ╚══════════════════════════════════════════════════════╝"
   echo ""
 
-  if command -v less &>/dev/null; then
-    less +F "$LOG_FILE"
-  else
-    tail -f "$LOG_FILE"
-  fi
+  tail -f "$LOG_FILE"
 }
 
-case "${1}" in
-  tail|*) do_tail ;;
-esac
+do_tail

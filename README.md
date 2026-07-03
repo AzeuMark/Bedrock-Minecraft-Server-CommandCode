@@ -981,7 +981,8 @@ draw_dashboard() {
   printf "    Version  : %s\n" "$ver"
   printf "    Players  : %s / %s\n" "$players" "$max_players"
   printf "    RAM      : %s\n" "$ram"
-  printf "    Address  : %s:%s\n" "$ip" "$port"
+  printf "    IP Address: %s\n" "$ip"
+  printf "    PORT      : %s\n" "$port"
   echo ""
   echo "  ───────────────────────────────────────────────────────"
   echo ""
@@ -1121,23 +1122,15 @@ do_stop() {
     echo "  Server is not running."
     return
   fi
-
   echo "  The server has been fully stopped and will not auto-start upon VPS reboot."
-  read -r -p "  Continue? (y/N): " confirm
-  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    echo "  Cancelled."
-    return
-  fi
-
+  read -r -p "  Press Enter to dismiss..."
   echo "  Stopping server..."
-  systemctl stop "$SERVICE_NAME"
-  local waited=0
-  while server_is_running && [[ $waited -lt 15 ]]; do
-    sleep 1; waited=$((waited + 1))
-  done
-
-  state_set_off
   systemctl disable "$SERVICE_NAME" 2>/dev/null
+  systemctl stop "$SERVICE_NAME" 2>/dev/null
+  local waited=0
+  while server_is_running && [[ $waited -lt 15 ]]; do sleep 1; waited=$((waited + 1)); done
+  if server_is_running; then systemctl kill "$SERVICE_NAME" --signal=SIGKILL 2>/dev/null; sleep 1; fi
+  state_set_off
   echo "  ✓ Server stopped. Auto-start on boot is now DISABLED."
   log_info "Server stopped, auto-start disabled."
 }
@@ -1193,18 +1186,13 @@ do_tail() {
   fi
   clear
   echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║               LIVE LOG — Press q to exit            ║"
+  echo "  ║          LIVE LOG — Press Ctrl+C to exit            ║"
   echo "  ╚══════════════════════════════════════════════════════╝"
-  if command -v less &>/dev/null; then
-    less +F "$LOG_FILE"
-  else
-    tail -f "$LOG_FILE"
-  fi
+  echo ""
+  tail -f "$LOG_FILE"
 }
 
-case "${1}" in
-  tail|*) do_tail ;;
-esac
+do_tail
 ```
 </details>
 

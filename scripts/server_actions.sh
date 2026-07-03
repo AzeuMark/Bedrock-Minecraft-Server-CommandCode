@@ -38,23 +38,30 @@ do_stop() {
   fi
 
   echo "  The server has been fully stopped and will not auto-start upon VPS reboot."
-  read -r -p "  Continue? (y/N): " confirm
-  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    echo "  Cancelled."
-    return
-  fi
+  read -r -p "  Press Enter to dismiss..."
 
   echo "  Stopping server..."
-  systemctl stop "$SERVICE_NAME"
 
+  # Disable first so Restart= won't re-fire the service
+  systemctl disable "$SERVICE_NAME" 2>/dev/null
+
+  # Now stop — try graceful, then force
+  systemctl stop "$SERVICE_NAME" 2>/dev/null
+
+  # Wait up to 15s for it to actually stop
   local waited=0
   while server_is_running && [[ $waited -lt 15 ]]; do
     sleep 1
     waited=$((waited + 1))
   done
 
+  # Force kill if still running
+  if server_is_running; then
+    systemctl kill "$SERVICE_NAME" --signal=SIGKILL 2>/dev/null
+    sleep 1
+  fi
+
   state_set_off
-  systemctl disable "$SERVICE_NAME" 2>/dev/null
   echo "  ✓ Server stopped."
   echo "  Auto-start on boot is now DISABLED."
   log_info "Server stopped, auto-start disabled."

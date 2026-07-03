@@ -71,6 +71,9 @@ do_backup() {
     fi
   done
 
+  # Also delete the temp file in backups/ dir after upload attempt
+  rm -f "$backup_local_path"
+
   if $upload_ok; then
     rm -f "$backup_local_path"
     echo ""
