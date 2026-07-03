@@ -6,7 +6,7 @@
 # After successful upload to Drive, the local tarball is deleted.
 # If upload fails, local copy is kept and user is warned.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 # ──────────────────────────────────────────────

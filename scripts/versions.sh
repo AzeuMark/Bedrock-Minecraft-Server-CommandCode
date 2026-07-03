@@ -7,7 +7,7 @@
 #   versions.sh              → interactive menu
 #   versions.sh install_latest → non-interactive install of latest version
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 VERSIONS_INDEX_URL="https://raw.githubusercontent.com/Bedrock-OSS/BDSVerse/main/versions.json"

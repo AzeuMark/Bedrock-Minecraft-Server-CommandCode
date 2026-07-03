@@ -4,7 +4,7 @@
 # Installed to /usr/local/bin/mc and /usr/local/bin/minecraft.
 # Sources common.sh, routes to sub-menus.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 # ──────────────────────────────────────────────

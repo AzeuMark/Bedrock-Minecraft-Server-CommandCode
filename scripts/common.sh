@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # common.sh — Shared paths, state management, config loader, and UI helpers
-# Source this from any other script:  source "$(dirname "$0")/common.sh"
+# Source this from any other script:  source "$(dirname "$(readlink -f "$0")")/common.sh"
 
 # ──────────────────────────────────────────────
 # Paths

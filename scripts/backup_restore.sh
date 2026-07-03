@@ -4,7 +4,7 @@
 # Stops the server if running, downloads + extracts the chosen backup
 # into the worlds/ folder, then restarts if it was running before.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 # ──────────────────────────────────────────────

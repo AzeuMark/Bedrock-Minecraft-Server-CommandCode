@@ -4,7 +4,7 @@
 # Respects server.state flag. Start also enables auto-start on boot.
 # Stop also disables auto-start on boot.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 # ──────────────────────────────────────────────

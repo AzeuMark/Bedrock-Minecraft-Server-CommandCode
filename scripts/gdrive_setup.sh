@@ -6,7 +6,7 @@
 #   rclone authorize "drive"
 # on a machine with a browser.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 REMOTE_NAME="gdrive"

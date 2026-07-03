@@ -5,7 +5,7 @@
 # Creates a systemd timer to trigger backups at the configured time daily.
 # The actual backup logic is in the companion service unit.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 AUTO_SCRIPT="$SCRIPTS_DIR/backup_auto_runner.sh"
@@ -118,7 +118,7 @@ create_runner() {
 # If ON, uses save hold/save resume for clean snapshot.
 # Deletes local tarball after successful upload to Drive.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 # Abort if no gdrive connection

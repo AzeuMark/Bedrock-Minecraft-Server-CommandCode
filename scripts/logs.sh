@@ -2,7 +2,7 @@
 #
 # logs.sh — View and tail Minecraft Bedrock server logs
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 LOG_FILE="$LOGS_DIR/server.log"
