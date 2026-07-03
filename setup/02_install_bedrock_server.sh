@@ -75,6 +75,17 @@ chmod +x bedrock_server
 
 # Extract version from the zip filename (e.g. bedrock-server-1.26.32.2.zip)
 INSTALLED_VERSION=$(echo "$DOWNLOAD_URL" | grep -oP '\d+\.\d+\.\d+\.\d+')
+
+# Write version to config
+if [[ -n "$INSTALLED_VERSION" ]]; then
+  CONFIG_FILE="$INSTALL_ROOT/config/mc.conf"
+  if grep -q "^CURRENT_VERSION=" "$CONFIG_FILE" 2>/dev/null; then
+    sed -i "s|^CURRENT_VERSION=.*|CURRENT_VERSION=${INSTALLED_VERSION}|" "$CONFIG_FILE"
+  else
+    echo "CURRENT_VERSION=${INSTALLED_VERSION}" >> "$CONFIG_FILE"
+  fi
+fi
+
 echo ""
 echo "=== Bedrock server installed successfully ==="
 echo "Version: ${INSTALLED_VERSION:-unknown}"

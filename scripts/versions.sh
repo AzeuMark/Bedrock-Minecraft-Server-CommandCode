@@ -1,42 +1,44 @@
 #!/bin/bash
 #
-# versions.sh — List, install, and switch Bedrock Dedicated Server versions.
-# Supports: "Install Latest" (official download), "Install Specific" (community index).
+# versions.sh — Check for updates and install latest Bedrock version.
+# Compares installed version against the official API.
 #
 # Usage:
-#   versions.sh              → interactive menu
-#   versions.sh install_latest → non-interactive install of latest version
+#   versions.sh               → interactive menu (Check Update / Back)
+#   versions.sh install_latest → non-interactive install (first-run)
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-VERSIONS_INDEX_URL="https://raw.githubusercontent.com/Bedrock-OSS/BDSVerse/main/versions.json"
+API_URL="https://net-secondary.web.minecraft-services.net/api/v1.0/download/links"
 
 # ──────────────────────────────────────────────
-# Fetch latest download URL from Mojang
+# Fetch latest serverBedrockLinux info from API
 # ──────────────────────────────────────────────
-fetch_latest_url() {
-  local api_url="https://net-secondary.web.minecraft-services.net/api/v1.0/download/links"
+fetch_latest_info() {
+  local json
+  json=$(curl -sL "$API_URL")
   local url
-  url=$(curl -sL "$api_url" | jq -r '.result.links[] | select(.downloadType == "serverBedrockLinux") | .downloadUrl')
+  url=$(echo "$json" | jq -r '.result.links[] | select(.downloadType == "serverBedrockLinux") | .downloadUrl')
+  local version
+  version=$(echo "$url" | grep -oP '\d+\.\d+\.\d+\.\d+')
 
   if [[ -z "$url" || "$url" == "null" ]]; then
     echo ""
-  else
-    echo "$url"
+    return
   fi
+  echo "$url|$version"
 }
 
 # ──────────────────────────────────────────────
-# Extract version string from download URL
+# Compare versions (simple string compare)
 # ──────────────────────────────────────────────
-version_from_url() {
-  local url="$1"
-  echo "$url" | grep -oP '\d+\.\d+\.\d+\.\d+'
+version_gt() {
+  test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
 }
 
 # ──────────────────────────────────────────────
-# Install a Bedrock version from a URL
+# Install a version from a download URL
 # ──────────────────────────────────────────────
 install_version() {
   local url="$1"
@@ -45,7 +47,7 @@ install_version() {
 
   if server_is_running; then
     was_running=true
-    server_command "say Server is updating version..."
+    server_command "say Server is updating to $version..."
     server_command "stop"
     sleep 3
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
@@ -58,8 +60,8 @@ install_version() {
   cd "$tmp_dir"
 
   if ! wget -O bedrock-server.zip "$url" 2>/dev/null; then
-    msgbox "Download failed for version $version."
-    log_error "Download failed for version $version from $url"
+    msgbox "Download failed."
+    log_error "Download failed: $url"
     cd /
     rm -rf "$tmp_dir"
     return 1
@@ -67,152 +69,111 @@ install_version() {
 
   infobox "Extracting Bedrock $version..."
 
-  # Backup worlds and properties before overwriting
+  # Backup worlds and settings
   local world_backup
   world_backup=$(mktemp -d)
-  if [[ -d "$SERVER_DIR/worlds" ]]; then
-    cp -r "$SERVER_DIR/worlds" "$world_backup/"
-  fi
-  if [[ -f "$SERVER_DIR/server.properties" ]]; then
-    cp "$SERVER_DIR/server.properties" "$world_backup/"
-  fi
-  if [[ -f "$SERVER_DIR/whitelist.json" ]]; then
-    cp "$SERVER_DIR/whitelist.json" "$world_backup/" 2>/dev/null || true
-  fi
-  if [[ -f "$SERVER_DIR/permissions.json" ]]; then
-    cp "$SERVER_DIR/permissions.json" "$world_backup/" 2>/dev/null || true
-  fi
+  for item in worlds server.properties whitelist.json permissions.json; do
+    [[ -e "$SERVER_DIR/$item" ]] && cp -r "$SERVER_DIR/$item" "$world_backup/"
+  done
 
-  # Extract
+  # Extract new version
   unzip -o bedrock-server.zip -d "$SERVER_DIR/" 2>/dev/null
   chmod +x "$SERVER_DIR/bedrock_server"
 
-  # Restore worlds and properties
-  if [[ -d "$world_backup/worlds" ]]; then
-    rm -rf "$SERVER_DIR/worlds"
-    cp -r "$world_backup/worlds" "$SERVER_DIR/"
-  fi
-  if [[ -f "$world_backup/server.properties" ]]; then
-    cp "$world_backup/server.properties" "$SERVER_DIR/"
-  fi
-  if [[ -f "$world_backup/whitelist.json" ]]; then
-    cp "$world_backup/whitelist.json" "$SERVER_DIR/" 2>/dev/null || true
-  fi
-  if [[ -f "$world_backup/permissions.json" ]]; then
-    cp "$world_backup/permissions.json" "$SERVER_DIR/" 2>/dev/null || true
-  fi
+  # Restore worlds and settings
+  for item in worlds server.properties whitelist.json permissions.json; do
+    [[ -e "$world_backup/$item" ]] && rm -rf "$SERVER_DIR/$item" && cp -r "$world_backup/$item" "$SERVER_DIR/"
+  done
 
   cd /
   rm -rf "$tmp_dir" "$world_backup"
 
   write_config "CURRENT_VERSION" "$version"
-  msgbox "Bedrock $version installed successfully.
-Your worlds and settings were preserved."
-
-  log_info "Installed Bedrock version $version"
+  log_info "Updated to version $version"
 
   # Restart if it was running before
   if $was_running; then
     systemctl start "$SERVICE_NAME"
     sleep 2
-    if server_is_running; then
-      msgbox "Server restarted with version $version."
+  fi
+
+  msgbox "✓ Updated to Bedrock $version
+
+Your worlds and settings were preserved."
+}
+
+# ──────────────────────────────────────────────
+# Check for update
+# ──────────────────────────────────────────────
+check_update() {
+  infobox "Checking for updates..."
+
+  local info
+  info=$(fetch_latest_info)
+  if [[ -z "$info" ]]; then
+    msgbox "Could not fetch latest version info.
+Check your internet connection."
+    return
+  fi
+
+  local latest_url="${info%%|*}"
+  local latest_ver="${info##*|}"
+
+  if [[ -z "$latest_ver" ]]; then
+    msgbox "Could not parse latest version from API response."
+    return
+  fi
+
+  local current="${CURRENT_VERSION}"
+
+  if [[ -z "$current" ]]; then
+    # No version installed yet — offer to install
+    if yesno "No Bedrock version installed.
+
+Install latest version $latest_ver?"; then
+      install_version "$latest_url" "$latest_ver"
     fi
+    return
+  fi
+
+  if [[ "$current" == "$latest_ver" ]]; then
+    msgbox "You're already on the latest version: $latest_ver"
+    return
+  fi
+
+  if version_gt "$latest_ver" "$current"; then
+    msgbox "Update available!
+
+Current: $current
+Latest:  $latest_ver"
+
+    if yesno "Update to Bedrock $latest_ver?
+
+Your worlds and settings will be preserved.
+The server will be temporarily stopped."; then
+      install_version "$latest_url" "$latest_ver"
+    fi
+  else
+    msgbox "Your version ($current) is ahead of the latest release ($latest_ver).
+You may be on a preview version."
   fi
 }
 
 # ──────────────────────────────────────────────
-# Install latest version (also called from first-run)
+# Install latest (non-interactive, for first-run)
 # ──────────────────────────────────────────────
 install_latest() {
-  local url
-  url=$(fetch_latest_url)
-  local version
-  version=$(version_from_url "$url")
-
-  if [[ -z "$version" ]]; then
-    version="latest"
+  local info
+  info=$(fetch_latest_info)
+  if [[ -z "$info" ]]; then
+    echo "ERROR: Could not fetch latest version."
+    exit 1
   fi
 
-  install_version "$url" "$version"
-}
+  local latest_url="${info%%|*}"
+  local latest_ver="${info##*|}"
 
-# ──────────────────────────────────────────────
-# Install specific version (from community index)
-# ──────────────────────────────────────────────
-install_specific() {
-  infobox "Fetching available versions..."
-  local versions_json
-  versions_json=$(curl -sL "$VERSIONS_INDEX_URL" 2>/dev/null)
-
-  if [[ -z "$versions_json" ]]; then
-    msgbox "Could not fetch version list from community index.
-Check your internet connection or try again later.
-
-Using fallback: installing latest version instead."
-    install_latest
-    return
-  fi
-
-  # Parse version list (supports both array and object formats)
-  local versions_list
-  versions_list=$(echo "$versions_json" | jq -r 'if type == "array" then .[] else .versions[] end' 2>/dev/null)
-
-  if [[ -z "$versions_list" ]]; then
-    msgbox "Could not parse version list. Installing latest instead."
-    install_latest
-    return
-  fi
-
-  # Build whiptail menu
-  local menu_items=()
-  local i=1
-  while IFS= read -r ver; do
-    menu_items+=("$i" "$ver")
-    i=$((i + 1))
-  done <<< "$versions_list"
-
-  if [[ ${#menu_items[@]} -eq 0 ]]; then
-    msgbox "No versions found. Installing latest instead."
-    install_latest
-    return
-  fi
-
-  local choice
-  choice=$(show_menu "Select a version to install:" "${menu_items[@]}")
-
-  if [[ -z "$choice" ]]; then
-    return
-  fi
-
-  # Find the selected version text
-  local selected_version
-  selected_version=$(echo "$versions_list" | sed -n "${choice}p")
-
-  if [[ -z "$selected_version" ]]; then
-    return
-  fi
-
-  # Get download URL for selected version
-  local download_url
-  download_url=$(echo "$versions_json" | jq -r --arg v "$selected_version" \
-    'if type == "array" then .[] | select(.version == $v) | .downloads.linux.url
-     else .versions[] | select(.version == $v) | .downloads.linux.url end' 2>/dev/null)
-
-  if [[ -z "$download_url" || "$download_url" == "null" ]]; then
-    msgbox "Could not find download URL for version $selected_version.
-Try installing the latest version instead."
-    return
-  fi
-
-  if ! yesno "Install Bedrock $selected_version?
-
-Your current worlds/, server.properties, and settings will be preserved.
-The server will be temporarily stopped during installation."; then
-    return
-  fi
-
-  install_version "$download_url" "$selected_version"
+  install_version "$latest_url" "$latest_ver"
 }
 
 # ──────────────────────────────────────────────
@@ -221,13 +182,11 @@ The server will be temporarily stopped during installation."; then
 menu_versions() {
   local choice
   choice=$(show_menu "Versions — Installed: ${CURRENT_VERSION:-none}" \
-    "1" "Install Latest" \
-    "2" "Install Specific Version" \
-    "3" "Back")
+    "1" "Check for Update" \
+    "2" "Back")
 
   case "$choice" in
-    1) install_latest ;;
-    2) install_specific ;;
+    1) check_update ;;
     *) return ;;
   esac
 }
@@ -236,7 +195,6 @@ menu_versions() {
 # Entry point
 # ──────────────────────────────────────────────
 if [[ "$1" == "install_latest" ]]; then
-  # Non-interactive mode for first-run
   install_latest
 else
   menu_versions
