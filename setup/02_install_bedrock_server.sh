@@ -1,0 +1,80 @@
+#!/bin/bash
+#
+# 02_install_bedrock_server.sh
+# Creates the /opt/mcbedrock folder structure and downloads the latest
+# Minecraft Bedrock Dedicated Server.
+# Run as root or with sudo.
+
+set -e
+
+if [[ $EUID -ne 0 ]]; then
+  echo "This script must be run as root (use sudo)."
+  exit 1
+fi
+
+INSTALL_ROOT="/opt/mcbedrock"
+SERVER_DIR="$INSTALL_ROOT/server"
+
+echo "=== Creating /opt/mcbedrock folder structure ==="
+
+mkdir -p "$INSTALL_ROOT"/{setup,scripts,config,server,backups,logs}
+
+# Create a placeholder server.properties so Bedrock doesn't fail on first run
+if [[ ! -f "$SERVER_DIR/server.properties" ]]; then
+  cat > "$SERVER_DIR/server.properties" << 'PROPS'
+server-name=Minecraft Bedrock Server
+gamemode=survival
+difficulty=easy
+allow-cheats=false
+max-players=10
+online-mode=true
+white-list=false
+server-port=19132
+server-portv6=19133
+view-distance=32
+tick-distance=4
+player-idle-timeout=30
+max-threads=8
+level-name=Bedrock level
+level-seed=
+default-player-permission-level=member
+texturepack-required=false
+content-log-file-enabled=false
+compression-threshold=1
+server-authoritative-movement=server-short-tick
+enable-lan-visibility=false
+PROPS
+fi
+
+echo ""
+echo "=== Folder structure created ==="
+echo "$INSTALL_ROOT"
+ls -la "$INSTALL_ROOT"
+
+echo ""
+echo "=== Downloading latest Bedrock Dedicated Server ==="
+
+DOWNLOAD_PAGE="https://www.minecraft.net/en-us/download/server/bedrock"
+# Grab the download URL for Linux from the official page
+DOWNLOAD_URL=$(curl -sL "$DOWNLOAD_PAGE" | grep -oP 'https://[^"]+bedrock-server-[^"]+\.zip' | head -1)
+
+if [[ -z "$DOWNLOAD_URL" ]]; then
+  echo "ERROR: Could not find download URL. Trying fallback..."
+  # Fallback: known current URL pattern (update as needed)
+  DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-1.21.70.03.zip"
+fi
+
+echo "Download URL: $DOWNLOAD_URL"
+
+cd "$SERVER_DIR"
+curl -# -o bedrock-server.zip "$DOWNLOAD_URL"
+
+echo "Extracting..."
+unzip -o bedrock-server.zip
+rm bedrock-server.zip
+
+chmod +x bedrock_server
+
+echo ""
+echo "=== Bedrock server installed successfully ==="
+echo "Version: $(strings bedrock_server | grep -oP '^\d+\.\d+\.\d+\.\d+' | head -1 || echo 'unknown')"
