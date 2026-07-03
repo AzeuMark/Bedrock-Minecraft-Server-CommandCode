@@ -14,3 +14,6 @@
 # cli-commands
 - Format setup/deployment commands as single-line semicolon-separated chains (`cmd1; cmd2; cmd3`) for easy copy-paste execution instead of listing individual commands on separate lines. Confidence: 0.70
 
+# messaging
+- Use concise, single-line status messages instead of verbose multi-line explanations for server actions (e.g., "The server has been fully stopped and will not auto-start upon VPS reboot" instead of multi-paragraph warnings). Confidence: 0.65
+

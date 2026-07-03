@@ -87,13 +87,15 @@ handle_choice() {
       bash "$SCRIPTS_DIR/server_actions.sh" restart
       ;;
     4)
-      logs_menu
+      bash "$SCRIPTS_DIR/logs.sh" tail
       ;;
     5)
       backup_menu
       ;;
     6)
       bash "$SCRIPTS_DIR/versions.sh"
+      echo ""
+      read -r -p "  Press Enter to return to menu..."
       ;;
     7)
       clear
@@ -105,40 +107,6 @@ handle_choice() {
     *)
       echo "  Invalid option. Press Enter to try again."
       read -r
-      ;;
-  esac
-}
-
-# ──────────────────────────────────────────────
-# Logs sub-menu
-# ──────────────────────────────────────────────
-logs_menu() {
-  clear
-  echo "  ╔══════════════════════════════════════════════════════╗"
-  echo "  ║                   VIEW LOGS                        ║"
-  echo "  ╚══════════════════════════════════════════════════════╝"
-  echo ""
-  echo "    1)  LIVE TAIL (real-time)"
-  echo "    2)  LAST 500 LINES"
-  echo "    3)  BACK"
-  echo ""
-  echo "  ───────────────────────────────────────────────────────"
-  echo ""
-  read -r -p "  Select an option [1-3]: " choice
-
-  case "$choice" in
-    1)
-      bash "$SCRIPTS_DIR/logs.sh" tail
-      # After tail -f exits (Ctrl+C), just return to dashboard
-      return
-      ;;
-    2)
-      bash "$SCRIPTS_DIR/logs.sh" last500
-      read -r -p "  Press Enter to return to logs menu..."
-      logs_menu
-      ;;
-    *)
-      return
       ;;
   esac
 }

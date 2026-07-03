@@ -37,10 +37,7 @@ do_stop() {
     return
   fi
 
-  echo "  Stopping the server will disable auto-start on boot."
-  echo "  The server will NOT start automatically after a reboot"
-  echo "  until you use START SERVER again."
-  echo ""
+  echo "  The server has been fully stopped and will not auto-start upon VPS reboot."
   read -r -p "  Continue? (y/N): " confirm
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo "  Cancelled."
